@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local dev secrets — never commit key material
+*.pem
+*.key
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+*.iml
