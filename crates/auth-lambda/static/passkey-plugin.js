@@ -18,9 +18,6 @@
  * Keep the DATASTAR_URL constant in sync with the <script> tag in your HTML templates.
  */
 
-const DATASTAR_URL =
-  'https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.8/bundles/datastar.js';
-
 // ── Binary helpers ────────────────────────────────────────────────────────────
 
 /** base64url string → Uint8Array */
@@ -333,42 +330,34 @@ async function doLogin(ctx, email) {
   }
 }
 
-// ── Datastar plugin registration ───────────────────────────────────────────────
+// ── Event listener setup ──────────────────────────────────────────────────────
 
-const plugins = [
-  { name: 'passkeyRegister', apply: doRegister },
-  { name: 'passkeyLogin',    apply: doLogin    },
-];
-
-// Import `action` from Datastar. Using a dynamic import so we can handle
-// failures gracefully. The URL must match the one in the HTML <script> tag.
-let registered = false;
-try {
-  const ds = await import(DATASTAR_URL);
-  if (typeof ds.action === 'function') {
-    plugins.forEach((p) => ds.action(p));
-    registered = true;
+// Wait for DOM to be ready, then set up event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  // Find register button
+  const registerBtn = document.querySelector('button[data-on-click*="passkeyRegister"]');
+  if (registerBtn) {
+    registerBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = window.Datastar.root.email;
+      const displayName = window.Datastar.root.displayName;
+      console.log('[passkey-plugin] Register clicked:', { email, displayName });
+      await doRegister(null, email, displayName);
+    });
+    console.log('[passkey-plugin] Register button listener attached');
   }
-} catch (_) {
-  // Module import failed (e.g. offline, URL mismatch) — fall through to global
-}
 
-if (!registered) {
-  // Fallback: try the global Datastar object (set by non-module bundle variants)
-  const ds = window.Datastar;
-  if (ds) {
-    const reg =
-      ds.action?.bind(ds) ??
-      ((p) => ds.addPlugin?.({ type: 'action', ...p })) ??
-      ((p) => ds.registerPlugin?.({ type: 'action', ...p }));
-    plugins.forEach(reg);
-    registered = true;
+  // Find login button
+  const loginBtn = document.querySelector('button[data-on-click*="passkeyLogin"]');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = window.Datastar.root.email;
+      console.log('[passkey-plugin] Login clicked:', { email });
+      await doLogin(null, email);
+    });
+    console.log('[passkey-plugin] Login button listener attached');
   }
-}
 
-if (!registered) {
-  console.error(
-    '[passkey-plugin] Could not register actions: Datastar not found.',
-    'Ensure Datastar is loaded before this script.',
-  );
-}
+  console.log('[passkey-plugin] Event listeners set up successfully');
+});

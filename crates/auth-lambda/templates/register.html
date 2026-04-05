@@ -34,7 +34,11 @@
     <p class="switch">Already have an account? <a href="/">Sign in</a></p>
   </div>
 
-  <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.8/bundles/datastar.js"></script>
+  <script type="module">
+    import('/static/datastar.js').then(ds => {
+      window.Datastar = ds;
+    }).catch(e => console.error('Failed to load Datastar:', e));
+  </script>
   <script type="module" src="/static/passkey-plugin.js"></script>
 </body>
 </html>

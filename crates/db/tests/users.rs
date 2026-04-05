@@ -15,7 +15,7 @@ fn alice() -> User {
 #[tokio::test]
 async fn put_and_get_by_id() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
     let user = alice();
 
     repo.put(&user).await.unwrap();
@@ -31,7 +31,7 @@ async fn put_and_get_by_id() {
 #[tokio::test]
 async fn get_missing_user_returns_not_found() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
 
     let err = repo.get(&UserId::new()).await.unwrap_err();
     assert!(matches!(err, DbError::NotFound));
@@ -40,7 +40,7 @@ async fn get_missing_user_returns_not_found() {
 #[tokio::test]
 async fn get_by_email() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
     let user = alice();
 
     repo.put(&user).await.unwrap();
@@ -53,7 +53,7 @@ async fn get_by_email() {
 #[tokio::test]
 async fn get_by_email_missing_returns_not_found() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
 
     let err = repo.get_by_email("nobody@example.com").await.unwrap_err();
     assert!(matches!(err, DbError::NotFound));
@@ -62,7 +62,7 @@ async fn get_by_email_missing_returns_not_found() {
 #[tokio::test]
 async fn update_role() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
     let user = alice();
 
     repo.put(&user).await.unwrap();
@@ -75,7 +75,7 @@ async fn update_role() {
 #[tokio::test]
 async fn update_status() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
     let user = alice();
 
     repo.put(&user).await.unwrap();
@@ -88,7 +88,7 @@ async fn update_status() {
 #[tokio::test]
 async fn list_returns_stored_users() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
 
     let u1 = User::new("user1@example.com".into(), "User1".into());
     let u2 = User::new("user2@example.com".into(), "User2".into());
@@ -103,7 +103,7 @@ async fn list_returns_stored_users() {
 #[tokio::test]
 async fn list_pagination() {
     let env = common::TestEnv::new().await;
-    let repo = UserRepository::new(env.db);
+    let repo = UserRepository::new(env.db.clone());
 
     for i in 0..5u8 {
         repo.put(&User::new(format!("user{i}@example.com"), format!("User{i}")))

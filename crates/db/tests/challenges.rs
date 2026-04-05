@@ -7,7 +7,7 @@ use domain::challenge::Challenge;
 #[tokio::test]
 async fn put_and_get() {
     let env = common::TestEnv::new().await;
-    let repo = ChallengeRepository::new(env.db);
+    let repo = ChallengeRepository::new(env.db.clone());
     let challenge = Challenge::new_registration("{\"opaque\":true}".into(), 9999999999);
 
     repo.put(&challenge).await.unwrap();
@@ -22,7 +22,7 @@ async fn put_and_get() {
 #[tokio::test]
 async fn get_missing_returns_not_found() {
     let env = common::TestEnv::new().await;
-    let repo = ChallengeRepository::new(env.db);
+    let repo = ChallengeRepository::new(env.db.clone());
 
     let err = repo.get("nonexistent-id").await.unwrap_err();
     assert!(matches!(err, DbError::NotFound));
@@ -31,7 +31,7 @@ async fn get_missing_returns_not_found() {
 #[tokio::test]
 async fn take_consumes_challenge_preventing_replay() {
     let env = common::TestEnv::new().await;
-    let repo = ChallengeRepository::new(env.db);
+    let repo = ChallengeRepository::new(env.db.clone());
     let challenge = Challenge::new_registration("{}".into(), 9999999999);
 
     repo.put(&challenge).await.unwrap();
@@ -48,7 +48,7 @@ async fn take_consumes_challenge_preventing_replay() {
 #[tokio::test]
 async fn authentication_challenge_preserves_user_id() {
     let env = common::TestEnv::new().await;
-    let repo = ChallengeRepository::new(env.db);
+    let repo = ChallengeRepository::new(env.db.clone());
     let uid = "user-abc-123".to_string();
     let challenge = Challenge::new_authentication(uid.clone(), "{}".into(), 9999999999);
 

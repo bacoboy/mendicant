@@ -29,7 +29,7 @@ fn credential(user_id: UserId) -> Credential {
 async fn put_and_list_for_user() {
     let env = common::TestEnv::new().await;
     let user_repo = UserRepository::new(env.db.clone());
-    let cred_repo = CredentialRepository::new(env.db);
+    let cred_repo = CredentialRepository::new(env.db.clone());
 
     let u = user();
     user_repo.put(&u).await.unwrap();
@@ -47,7 +47,7 @@ async fn put_and_list_for_user() {
 #[tokio::test]
 async fn list_for_user_returns_empty_when_none() {
     let env = common::TestEnv::new().await;
-    let repo = CredentialRepository::new(env.db);
+    let repo = CredentialRepository::new(env.db.clone());
 
     let list = repo.list_for_user(&UserId::new()).await.unwrap();
     assert!(list.is_empty());
@@ -57,7 +57,7 @@ async fn list_for_user_returns_empty_when_none() {
 async fn update_sign_count() {
     let env = common::TestEnv::new().await;
     let user_repo = UserRepository::new(env.db.clone());
-    let cred_repo = CredentialRepository::new(env.db);
+    let cred_repo = CredentialRepository::new(env.db.clone());
 
     let u = user();
     user_repo.put(&u).await.unwrap();
@@ -76,7 +76,7 @@ async fn sign_count_regression_is_tolerated() {
     // this tolerates eventual consistency lag in Global Tables.
     let env = common::TestEnv::new().await;
     let user_repo = UserRepository::new(env.db.clone());
-    let cred_repo = CredentialRepository::new(env.db);
+    let cred_repo = CredentialRepository::new(env.db.clone());
 
     let u = user();
     user_repo.put(&u).await.unwrap();
@@ -97,7 +97,7 @@ async fn sign_count_regression_is_tolerated() {
 async fn delete_removes_credential() {
     let env = common::TestEnv::new().await;
     let user_repo = UserRepository::new(env.db.clone());
-    let cred_repo = CredentialRepository::new(env.db);
+    let cred_repo = CredentialRepository::new(env.db.clone());
 
     let u = user();
     user_repo.put(&u).await.unwrap();

@@ -11,7 +11,7 @@ fn grant() -> DeviceGrant {
 #[tokio::test]
 async fn put_and_get_by_device_code() {
     let env = common::TestEnv::new().await;
-    let repo = OAuthDeviceRepository::new(env.db);
+    let repo = OAuthDeviceRepository::new(env.db.clone());
     let g = grant();
 
     repo.put(&g).await.unwrap();
@@ -26,7 +26,7 @@ async fn put_and_get_by_device_code() {
 #[tokio::test]
 async fn get_by_user_code() {
     let env = common::TestEnv::new().await;
-    let repo = OAuthDeviceRepository::new(env.db);
+    let repo = OAuthDeviceRepository::new(env.db.clone());
     let g = grant();
 
     repo.put(&g).await.unwrap();
@@ -38,7 +38,7 @@ async fn get_by_user_code() {
 #[tokio::test]
 async fn duplicate_put_fails() {
     let env = common::TestEnv::new().await;
-    let repo = OAuthDeviceRepository::new(env.db);
+    let repo = OAuthDeviceRepository::new(env.db.clone());
     let g = grant();
 
     repo.put(&g).await.unwrap();
@@ -49,7 +49,7 @@ async fn duplicate_put_fails() {
 #[tokio::test]
 async fn approve_sets_status_and_user_id() {
     let env = common::TestEnv::new().await;
-    let repo = OAuthDeviceRepository::new(env.db);
+    let repo = OAuthDeviceRepository::new(env.db.clone());
     let g = grant();
 
     repo.put(&g).await.unwrap();
@@ -63,7 +63,7 @@ async fn approve_sets_status_and_user_id() {
 #[tokio::test]
 async fn approve_already_approved_fails() {
     let env = common::TestEnv::new().await;
-    let repo = OAuthDeviceRepository::new(env.db);
+    let repo = OAuthDeviceRepository::new(env.db.clone());
     let g = grant();
 
     repo.put(&g).await.unwrap();
@@ -77,7 +77,7 @@ async fn approve_already_approved_fails() {
 #[tokio::test]
 async fn deny_sets_status() {
     let env = common::TestEnv::new().await;
-    let repo = OAuthDeviceRepository::new(env.db);
+    let repo = OAuthDeviceRepository::new(env.db.clone());
     let g = grant();
 
     repo.put(&g).await.unwrap();

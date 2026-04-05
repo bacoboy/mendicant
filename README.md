@@ -17,13 +17,21 @@ Multi-region serverless auth platform on AWS. Passkey-only authentication, role-
 docker compose up -d   # DynamoDB Local on localhost:8000
 ```
 
-### 2. Generate a local signing key
+### 2. Create DynamoDB tables
+
+```bash
+bash scripts/setup-dynamodb-local.sh
+```
+
+This creates the 5 tables needed for local development and enables TTL attributes.
+
+### 3. Generate a local signing key
 
 ```bash
 openssl genrsa -out dev-key.pem 2048
 ```
 
-### 3. Set environment variables
+### 4. Set environment variables
 
 ```bash
 export DYNAMODB_ENDPOINT_URL=http://localhost:8000
@@ -40,7 +48,7 @@ export TABLE_CHALLENGES=challenges
 export TABLE_OAUTH_DEVICES=oauth_devices
 ```
 
-### 4. Run a lambda locally
+### 5. Run a lambda locally
 
 ```bash
 cargo lambda watch -p auth-lambda    # auth/identity lambda on http://localhost:9000

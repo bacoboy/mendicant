@@ -7,7 +7,17 @@ use crate::state::AppState;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/static/datastar.js", get(datastar_js))
         .route("/static/passkey-plugin.js", get(passkey_plugin_js))
+}
+
+/// Serve the Datastar core library. The file is downloaded during build
+/// and compiled into the binary via include_str!.
+async fn datastar_js() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        include_str!("../../static/datastar.js"),
+    )
 }
 
 /// Serve the passkey Datastar plugin. The file is compiled into the binary

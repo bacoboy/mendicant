@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 pub struct TestEnv {
     pub db: DynamoClient,
+    client: Client,
 }
 
 // ── Builder helpers ────────────────────────────────────────────────────────────
@@ -79,7 +80,35 @@ impl TestEnv {
         };
 
         create_tables(&client, &db).await;
-        Self { db }
+        Self { db, client }
+    }
+}
+
+impl Drop for TestEnv {
+    fn drop(&mut self) {
+        // Clean up test tables synchronously in Drop
+        let client = self.client.clone();
+        let tables = [
+            self.db.users_table.clone(),
+            self.db.credentials_table.clone(),
+            self.db.refresh_tokens_table.clone(),
+            self.db.challenges_table.clone(),
+            self.db.oauth_devices_table.clone(),
+        ];
+
+        // Create a new runtime for cleanup (separate from test runtime)
+        // This is safe because we're in Drop, which is called synchronously
+        std::thread::spawn(move || {
+            if let Ok(rt) = tokio::runtime::Runtime::new() {
+                rt.block_on(async {
+                    for table_name in &tables {
+                        let _ = client.delete_table().table_name(table_name).send().await;
+                    }
+                });
+            }
+        })
+        .join()
+        .ok(); // Wait for cleanup thread to complete, ignore errors
     }
 }
 

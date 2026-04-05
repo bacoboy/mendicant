@@ -78,7 +78,10 @@ async fn register_begin(
     ChallengeRepository::new(state.db.clone())
         .put(&challenge)
         .await
-        .context("failed to store challenge")?;
+        .map_err(|e| {
+            eprintln!("Challenge storage error: {:?}", e);
+            anyhow::anyhow!("failed to store challenge: {:?}", e)
+        })?;
 
     let signals = serde_json::json!({
         "challengeId": challenge_id,

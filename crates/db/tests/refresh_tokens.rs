@@ -12,7 +12,7 @@ fn token() -> RefreshToken {
 #[tokio::test]
 async fn put_and_get() {
     let env = common::TestEnv::new().await;
-    let repo = RefreshTokenRepository::new(env.db);
+    let repo = RefreshTokenRepository::new(env.db.clone());
     let t = token();
 
     repo.put(&t).await.unwrap();
@@ -27,7 +27,7 @@ async fn put_and_get() {
 #[tokio::test]
 async fn get_missing_returns_not_found() {
     let env = common::TestEnv::new().await;
-    let repo = RefreshTokenRepository::new(env.db);
+    let repo = RefreshTokenRepository::new(env.db.clone());
 
     let err = repo.get("no-such-jti").await.unwrap_err();
     assert!(matches!(err, DbError::NotFound));
@@ -36,7 +36,7 @@ async fn get_missing_returns_not_found() {
 #[tokio::test]
 async fn duplicate_put_fails() {
     let env = common::TestEnv::new().await;
-    let repo = RefreshTokenRepository::new(env.db);
+    let repo = RefreshTokenRepository::new(env.db.clone());
     let t = token();
 
     repo.put(&t).await.unwrap();
@@ -47,7 +47,7 @@ async fn duplicate_put_fails() {
 #[tokio::test]
 async fn revoke_marks_token_revoked() {
     let env = common::TestEnv::new().await;
-    let repo = RefreshTokenRepository::new(env.db);
+    let repo = RefreshTokenRepository::new(env.db.clone());
     let t = token();
 
     repo.put(&t).await.unwrap();
@@ -60,7 +60,7 @@ async fn revoke_marks_token_revoked() {
 #[tokio::test]
 async fn revoke_missing_token_fails() {
     let env = common::TestEnv::new().await;
-    let repo = RefreshTokenRepository::new(env.db);
+    let repo = RefreshTokenRepository::new(env.db.clone());
 
     let err = repo.revoke("ghost-jti").await.unwrap_err();
     assert!(matches!(err, DbError::ConditionalCheckFailed));
