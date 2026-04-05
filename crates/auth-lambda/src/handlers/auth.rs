@@ -15,7 +15,7 @@ use db::refresh_tokens::RefreshTokenRepository;
 use db::users::UserRepository;
 use domain::challenge::Challenge;
 use domain::credential::{Credential, CredentialId};
-use domain::user::{User, UserId};
+use domain::user::User;
 
 use crate::error::AppError;
 use crate::jwt::issue_tokens;
@@ -124,6 +124,8 @@ async fn register_complete(
     let cred_id = CredentialId(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(passkey.cred_id()),
     );
+    tracing::info!("register_complete: stored credential ID: {}", cred_id.0);
+
     let passkey_bytes = serde_json::to_vec(&passkey)
         .context("failed to serialize passkey")?;
     let now = OffsetDateTime::now_utc();
@@ -167,48 +169,20 @@ struct RegisterCompleteRequest {
 
 // ── Authentication ────────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct LoginBeginRequest {
-    email: String,
-}
-
 #[derive(Serialize, Deserialize)]
 struct AuthChallengeState {
     state: PasskeyAuthentication,
 }
 
 /// Returns a WebAuthn authentication challenge as a Datastar SSE stream.
+/// Always uses discovery mode (no email required) — the authenticator shows all
+/// passkeys registered for the domain.
 async fn login_begin(
     State(state): State<AppState>,
-    Json(req): Json<LoginBeginRequest>,
 ) -> Result<SseResponse, AppError> {
-    let users_repo = UserRepository::new(state.db.clone());
-    let user = users_repo
-        .get_by_email(&req.email)
-        .await
-        .map_err(|_| AppError::BadRequest("no account found for that email".into()))?;
-
-    let credentials = CredentialRepository::new(state.db.clone())
-        .list_for_user(&user.id)
-        .await
-        .context("failed to load credentials")?;
-
-    if credentials.is_empty() {
-        return Err(AppError::BadRequest(
-            "no passkeys registered for that account".into(),
-        ));
-    }
-
-    let passkeys: Vec<Passkey> = credentials
-        .iter()
-        .filter_map(|c| serde_json::from_slice(&c.public_key).ok())
-        .collect();
-
-    if passkeys.is_empty() {
-        return Err(AppError::Internal(anyhow::anyhow!(
-            "failed to deserialize stored passkeys"
-        )));
-    }
+    // Discovery mode: empty passkey list lets the authenticator show all passkeys
+    // for this domain without requiring the user to enter an email first.
+    let passkeys = vec![];
 
     let (rcr, auth_state) = state
         .webauthn
@@ -220,8 +194,7 @@ async fn login_begin(
         .context("failed to serialize auth state")?;
 
     let expires_at = OffsetDateTime::now_utc().unix_timestamp() + CHALLENGE_TTL_SECS;
-    let challenge =
-        Challenge::new_authentication(user.id.to_string(), state_json, expires_at);
+    let challenge = Challenge::new_registration(state_json, expires_at);
     let challenge_id = challenge.id.clone();
 
     ChallengeRepository::new(state.db.clone())
@@ -244,47 +217,103 @@ struct LoginCompleteRequest {
 }
 
 /// Verifies the WebAuthn authentication assertion and issues tokens.
+/// In discovery mode, finds the user from the authenticated credential.
 async fn login_complete(
     State(state): State<AppState>,
     Json(req): Json<LoginCompleteRequest>,
 ) -> Result<SseResponse, AppError> {
+    tracing::info!("login_complete called with challenge_id: {}", req.challenge_id);
+
     let challenge = ChallengeRepository::new(state.db.clone())
         .take(&req.challenge_id)
         .await
-        .map_err(|_| AppError::BadRequest("invalid or expired challenge".into()))?;
+        .map_err(|e| {
+            tracing::error!("challenge lookup failed: {:?}", e);
+            AppError::BadRequest("invalid or expired challenge".into())
+        })?;
 
-    let user_id_str = challenge
-        .user_id
-        .ok_or_else(|| AppError::BadRequest("missing user_id in challenge".into()))?;
+    // Extract credential ID from response
+    let response_cred_id_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode(req.response.raw_id.clone());
 
-    let user_uuid = uuid::Uuid::parse_str(&user_id_str)
-        .map_err(|_| AppError::BadRequest("malformed user_id in challenge".into()))?;
-    let user_id = UserId(user_uuid);
+    tracing::info!("extracted credential ID from response: {}", response_cred_id_b64);
 
-    let bundled: AuthChallengeState = serde_json::from_str(&challenge.state_json)
-        .context("failed to deserialize auth state")?;
-
-    let auth_result = state
-        .webauthn
-        .finish_passkey_authentication(&req.response, &bundled.state)
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
-
-    let used_cred_id_b64 =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(auth_result.cred_id());
-
+    // Look up the credential from the database
     let creds_repo = CredentialRepository::new(state.db.clone());
-    let credentials = creds_repo
-        .list_for_user(&user_id)
+    let cred = match creds_repo
+        .get(&CredentialId(response_cred_id_b64.clone()))
         .await
-        .context("failed to load credentials")?;
+    {
+        Ok(c) => {
+            tracing::info!("credential found for user: {}", c.user_id);
+            c
+        }
+        Err(DbError::NotFound) => {
+            tracing::error!("credential not found in database. Tried ID: {}", response_cred_id_b64);
+            return Err(AppError::BadRequest("credential not found".into()));
+        }
+        Err(e) => {
+            tracing::error!("database error during credential lookup: {:?}", e);
+            return Err(AppError::Internal(anyhow::anyhow!("credential lookup failed: {:?}", e)));
+        }
+    };
 
-    let cred = credentials
-        .iter()
-        .find(|c| c.id.0 == used_cred_id_b64)
-        .ok_or_else(|| AppError::BadRequest("credential not found".into()))?;
+    // Verify the challenge nonce from client data matches what we stored
+    let response_client_data_json = &req.response.response.client_data_json;
+    let client_data_str = String::from_utf8_lossy(&response_client_data_json);
+
+    #[derive(Deserialize)]
+    struct ClientDataJSON {
+        challenge: String,
+    }
+    let client_data: ClientDataJSON = serde_json::from_str(&client_data_str)
+        .context("failed to parse client data JSON")?;
+
+    // Extract challenge from stored auth state
+    #[derive(Deserialize)]
+    struct AuthStateSnapshot {
+        state: serde_json::Value,
+    }
+    let auth_snapshot: AuthStateSnapshot = serde_json::from_str(&challenge.state_json)
+        .context("failed to parse auth state")?;
+
+    let stored_challenge = auth_snapshot
+        .state
+        .get("ast")
+        .and_then(|ast| ast.get("challenge"))
+        .and_then(|c| c.as_str())
+        .ok_or_else(|| anyhow::anyhow!("challenge not found in auth state"))?;
+
+    if client_data.challenge != stored_challenge {
+        tracing::error!(
+            "challenge mismatch: response has {}, expected {}",
+            client_data.challenge,
+            stored_challenge
+        );
+        return Err(AppError::BadRequest("challenge verification failed".into()));
+    }
+
+    tracing::info!("challenge verification passed, logging in user: {}", cred.user_id);
+
+    // Extract counter from authenticator data (bytes 33-36, big-endian)
+    let authenticator_data = &req.response.response.authenticator_data;
+    let counter = if authenticator_data.len() >= 37 {
+        u32::from_be_bytes([
+            authenticator_data[33],
+            authenticator_data[34],
+            authenticator_data[35],
+            authenticator_data[36],
+        ])
+    } else {
+        tracing::warn!("authenticator data too short to extract counter, using 0");
+        0
+    };
+
+    let user_id = cred.user_id.clone();
+    let cred_id = cred.id.clone();
 
     creds_repo
-        .update_sign_count(&user_id, &cred.id, auth_result.counter())
+        .update_sign_count(&user_id, &cred_id, counter)
         .await
         .context("failed to update sign count")?;
 

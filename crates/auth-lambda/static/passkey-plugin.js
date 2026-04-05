@@ -10,10 +10,10 @@
  *
  *   <!-- Signals that must exist on the page: -->
  *   <!--   register page: email, displayName, registerError -->
- *   <!--   login page:    email, loginError                  -->
+ *   <!--   login page:    loginError                        -->
  *
  *   <button data-on-click="@passkeyRegister($email, $displayName)">Register</button>
- *   <button data-on-click="@passkeyLogin($email)">Sign in</button>
+ *   <button data-on-click="@passkeyLogin()">Sign in</button>
  *
  * Keep the DATASTAR_URL constant in sync with the <script> tag in your HTML templates.
  */
@@ -271,25 +271,20 @@ async function doRegister(ctx, email, displayName) {
 }
 
 /**
- * @passkeyLogin(email)
+ * @passkeyLogin()
  *
- * Full passkey authentication flow:
- *   1. POST /auth/login/begin  → challenge
+ * Full passkey authentication flow (discovery mode — no email required):
+ *   1. POST /auth/login/begin  → challenge (discovery mode)
  *   2. navigator.credentials.get()
  *   3. POST /auth/login/complete → auth cookie + redirect
  */
-async function doLogin(ctx, email) {
+async function doLogin(ctx) {
   setSignal('loginError', '');
 
-  if (!email) {
-    setSignal('loginError', 'Please enter your email address.');
-    return;
-  }
-
-  // 1. Begin authentication
+  // 1. Begin authentication (discovery mode: no email needed)
   let beginSignals;
   try {
-    beginSignals = await fetchSSE('/auth/login/begin', { email });
+    beginSignals = await fetchSSE('/auth/login/begin', {});
   } catch (e) {
     setSignal('loginError', `Could not start sign-in: ${e.message}`);
     return;
@@ -352,9 +347,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginBtn) {
     loginBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-      const email = window.Datastar.root.email;
-      console.log('[passkey-plugin] Login clicked:', { email });
-      await doLogin(null, email);
+      console.log('[passkey-plugin] Login clicked');
+      await doLogin(null);
     });
     console.log('[passkey-plugin] Login button listener attached');
   }

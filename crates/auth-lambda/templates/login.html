@@ -20,13 +20,10 @@
 <body>
   <h1>Sign in to Mendicant</h1>
 
-  <div data-signals='{"email":"","loginOptions":null,"challengeId":"","loginError":""}'>
+  <div data-signals='{"loginOptions":null,"challengeId":"","loginError":""}'>
     <div data-show="$loginError !== ''" class="error" data-text="$loginError"></div>
 
-    <label for="email">Email</label>
-    <input id="email" type="email" data-bind="email" placeholder="you@example.com" autocomplete="username webauthn">
-
-    <button type="button" data-on-click="@passkeyLogin($email)">Sign in with Passkey</button>
+    <button type="button" data-on-click="@passkeyLogin()" style="margin-top: 2rem;">Sign in with Passkey</button>
 
     <p class="switch">No account? <a href="/register">Register</a></p>
   </div>
