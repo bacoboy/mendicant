@@ -66,3 +66,63 @@ impl User {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_user_defaults() {
+        let u = User::new("alice@example.com".into(), "Alice".into());
+        assert_eq!(u.email, "alice@example.com");
+        assert_eq!(u.display_name, "Alice");
+        assert_eq!(u.role, Role::Free);
+        assert_eq!(u.status, UserStatus::PendingVerification);
+        assert_eq!(u.created_at, u.updated_at);
+    }
+
+    #[test]
+    fn user_id_display_is_hyphenated_uuid() {
+        let id = UserId::new();
+        let s = id.to_string();
+        assert_eq!(s.len(), 36);
+        assert_eq!(s.chars().filter(|&c| c == '-').count(), 4);
+    }
+
+    #[test]
+    fn user_id_new_is_unique() {
+        assert_ne!(UserId::new(), UserId::new());
+    }
+
+    #[test]
+    fn role_serde_round_trip() {
+        for role in [Role::Free, Role::Member, Role::Administrator] {
+            let back: Role = serde_json::from_str(&serde_json::to_string(&role).unwrap()).unwrap();
+            assert_eq!(role, back);
+        }
+    }
+
+    #[test]
+    fn role_serializes_to_snake_case() {
+        assert_eq!(serde_json::to_string(&Role::Free).unwrap(), "\"free\"");
+        assert_eq!(serde_json::to_string(&Role::Member).unwrap(), "\"member\"");
+        assert_eq!(serde_json::to_string(&Role::Administrator).unwrap(), "\"administrator\"");
+    }
+
+    #[test]
+    fn user_status_serde_round_trip() {
+        for status in [UserStatus::Active, UserStatus::Suspended, UserStatus::PendingVerification] {
+            let back: UserStatus =
+                serde_json::from_str(&serde_json::to_string(&status).unwrap()).unwrap();
+            assert_eq!(status, back);
+        }
+    }
+
+    #[test]
+    fn user_status_serializes_to_snake_case() {
+        assert_eq!(
+            serde_json::to_string(&UserStatus::PendingVerification).unwrap(),
+            "\"pending_verification\""
+        );
+    }
+}

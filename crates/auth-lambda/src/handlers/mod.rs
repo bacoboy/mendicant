@@ -5,6 +5,7 @@ use crate::state::AppState;
 mod auth;
 mod oauth;
 mod pages;
+mod static_files;
 mod well_known;
 
 pub fn routes() -> Router<AppState> {
@@ -13,4 +14,5 @@ pub fn routes() -> Router<AppState> {
         .merge(auth::routes())
         .merge(oauth::routes())
         .merge(well_known::routes())
+        .merge(static_files::routes())
 }

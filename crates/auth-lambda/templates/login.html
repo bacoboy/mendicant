@@ -26,12 +26,12 @@
     <label for="email">Email</label>
     <input id="email" type="email" data-bind="email" placeholder="you@example.com" autocomplete="username webauthn">
 
-    <button type="button" data-on-click="@passkeyLogin()">Sign in with Passkey</button>
+    <button type="button" data-on-click="@passkeyLogin($email)">Sign in with Passkey</button>
 
     <p class="switch">No account? <a href="/register">Register</a></p>
   </div>
 
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@sudodevnull/datastar"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.8/bundles/datastar.js"></script>
   <script type="module" src="/static/passkey-plugin.js"></script>
 </body>
 </html>

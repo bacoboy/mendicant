@@ -1,0 +1,374 @@
+/**
+ * passkey-plugin.js
+ *
+ * Datastar plugin that adds @passkeyRegister() and @passkeyLogin() actions
+ * for WebAuthn passkey-only authentication.
+ *
+ * Usage in HTML:
+ *   <script type="module" src="...datastar.js"></script>
+ *   <script type="module" src="/static/passkey-plugin.js"></script>
+ *
+ *   <!-- Signals that must exist on the page: -->
+ *   <!--   register page: email, displayName, registerError -->
+ *   <!--   login page:    email, loginError                  -->
+ *
+ *   <button data-on-click="@passkeyRegister($email, $displayName)">Register</button>
+ *   <button data-on-click="@passkeyLogin($email)">Sign in</button>
+ *
+ * Keep the DATASTAR_URL constant in sync with the <script> tag in your HTML templates.
+ */
+
+const DATASTAR_URL =
+  'https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.8/bundles/datastar.js';
+
+// ── Binary helpers ────────────────────────────────────────────────────────────
+
+/** base64url string → Uint8Array */
+function b64urlToBytes(str) {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+  const bin = atob(padded);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** ArrayBuffer / Uint8Array → base64url string (no padding) */
+function bytesToB64url(buf) {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  // btoa has a 65536-byte argument limit in some environments; chunk if needed
+  let b64 = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(b64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// ── WebAuthn format converters ─────────────────────────────────────────────────
+
+/**
+ * Convert the server's CreationChallengeResponse (JSON, base64url binary)
+ * to the format expected by navigator.credentials.create().
+ * webauthn-rs wraps options in {publicKey: {...}}, which is exactly what
+ * the browser API expects — we just decode the binary fields.
+ */
+function toCreationOptions(serverResponse) {
+  const pk = { ...serverResponse.publicKey };
+  pk.challenge = b64urlToBytes(pk.challenge);
+  if (pk.user) {
+    pk.user = { ...pk.user, id: b64urlToBytes(pk.user.id) };
+  }
+  if (pk.excludeCredentials?.length) {
+    pk.excludeCredentials = pk.excludeCredentials.map((c) => ({
+      ...c,
+      id: b64urlToBytes(c.id),
+    }));
+  }
+  return { publicKey: pk };
+}
+
+/**
+ * Convert the server's RequestChallengeResponse (JSON, base64url binary)
+ * to the format expected by navigator.credentials.get().
+ */
+function toRequestOptions(serverResponse) {
+  const pk = { ...serverResponse.publicKey };
+  pk.challenge = b64urlToBytes(pk.challenge);
+  if (pk.allowCredentials?.length) {
+    pk.allowCredentials = pk.allowCredentials.map((c) => ({
+      ...c,
+      id: b64urlToBytes(c.id),
+    }));
+  }
+  return { publicKey: pk };
+}
+
+/**
+ * Serialize a registration PublicKeyCredential to JSON for the server.
+ * The server expects base64url-encoded binary fields (webauthn-rs convention).
+ */
+function serializeRegistration(cred) {
+  return {
+    id: cred.id,
+    rawId: bytesToB64url(cred.rawId),
+    type: cred.type,
+    authenticatorAttachment: cred.authenticatorAttachment ?? null,
+    clientExtensionResults: cred.getClientExtensionResults?.() ?? {},
+    response: {
+      attestationObject: bytesToB64url(cred.response.attestationObject),
+      clientDataJSON: bytesToB64url(cred.response.clientDataJSON),
+      ...(cred.response.getTransports
+        ? { transports: cred.response.getTransports() }
+        : {}),
+    },
+  };
+}
+
+/**
+ * Serialize an authentication PublicKeyCredential to JSON for the server.
+ */
+function serializeAuthentication(cred) {
+  return {
+    id: cred.id,
+    rawId: bytesToB64url(cred.rawId),
+    type: cred.type,
+    clientExtensionResults: cred.getClientExtensionResults?.() ?? {},
+    response: {
+      authenticatorData: bytesToB64url(cred.response.authenticatorData),
+      clientDataJSON: bytesToB64url(cred.response.clientDataJSON),
+      signature: bytesToB64url(cred.response.signature),
+      userHandle: cred.response.userHandle
+        ? bytesToB64url(cred.response.userHandle)
+        : null,
+    },
+  };
+}
+
+// ── SSE helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * POST to a Datastar SSE endpoint, parse the response stream, and return
+ * a map of signals extracted from datastar-patch-signals events.
+ * Also executes any datastar-execute-script events (e.g. redirects after login).
+ */
+async function fetchSSE(url, body) {
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => resp.statusText);
+    throw new Error(`${resp.status}: ${text}`);
+  }
+
+  const signals = {};
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+
+    // SSE events are separated by blank lines (\n\n)
+    const parts = buf.split('\n\n');
+    buf = parts.pop(); // keep any incomplete trailing event
+
+    for (const part of parts) {
+      let eventType = '';
+      const dataLines = [];
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event:')) {
+          eventType = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trim());
+        }
+      }
+      const data = dataLines.join('\n');
+
+      if (eventType === 'datastar-patch-signals') {
+        // Datastar prefix: "signals <json>"
+        const json = data.startsWith('signals ') ? data.slice(8) : data;
+        try {
+          Object.assign(signals, JSON.parse(json));
+        } catch (e) {
+          console.warn('[passkey-plugin] Failed to parse patch-signals:', e, json);
+        }
+      } else if (eventType === 'datastar-execute-script') {
+        // Datastar prefix: "script <code>"
+        const code = data.startsWith('script ') ? data.slice(7) : data;
+        try {
+          // eslint-disable-next-line no-new-func
+          new Function(code)();
+        } catch (e) {
+          console.warn('[passkey-plugin] Failed to execute script:', e, code);
+        }
+      }
+    }
+  }
+
+  return signals;
+}
+
+// ── Signal helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Write a value to a Datastar signal.
+ * Datastar v1.x exposes all signals on the global `root` reactive proxy.
+ */
+function setSignal(name, value) {
+  if (window.root) {
+    window.root[name] = value;
+  }
+}
+
+// ── Action implementations ─────────────────────────────────────────────────────
+
+/**
+ * @passkeyRegister(email, displayName)
+ *
+ * Full passkey registration flow:
+ *   1. POST /auth/register/begin  → challenge
+ *   2. navigator.credentials.create()
+ *   3. POST /auth/register/complete → auth cookie + redirect
+ */
+async function doRegister(ctx, email, displayName) {
+  // Clear any previous error
+  setSignal('registerError', '');
+
+  if (!email) {
+    setSignal('registerError', 'Please enter your email address.');
+    return;
+  }
+
+  // 1. Begin registration
+  let beginSignals;
+  try {
+    beginSignals = await fetchSSE('/auth/register/begin', {
+      email,
+      display_name: displayName || email.split('@')[0],
+    });
+  } catch (e) {
+    setSignal('registerError', `Could not start registration: ${e.message}`);
+    return;
+  }
+
+  const { challengeId, registerOptions } = beginSignals;
+  if (!challengeId || !registerOptions) {
+    setSignal('registerError', 'Server did not return registration options.');
+    return;
+  }
+
+  // 2. Create credential in the authenticator
+  let credential;
+  try {
+    credential = await navigator.credentials.create(toCreationOptions(registerOptions));
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      setSignal('registerError', 'Passkey creation was cancelled.');
+    } else {
+      setSignal('registerError', `Passkey creation failed: ${e.message}`);
+    }
+    return;
+  }
+
+  if (!credential) {
+    setSignal('registerError', 'No credential was returned by the authenticator.');
+    return;
+  }
+
+  // 3. Complete registration (server sets HttpOnly auth cookie and redirects)
+  try {
+    await fetchSSE('/auth/register/complete', {
+      challenge_id: challengeId,
+      response: serializeRegistration(credential),
+    });
+  } catch (e) {
+    setSignal('registerError', `Registration failed: ${e.message}`);
+  }
+}
+
+/**
+ * @passkeyLogin(email)
+ *
+ * Full passkey authentication flow:
+ *   1. POST /auth/login/begin  → challenge
+ *   2. navigator.credentials.get()
+ *   3. POST /auth/login/complete → auth cookie + redirect
+ */
+async function doLogin(ctx, email) {
+  setSignal('loginError', '');
+
+  if (!email) {
+    setSignal('loginError', 'Please enter your email address.');
+    return;
+  }
+
+  // 1. Begin authentication
+  let beginSignals;
+  try {
+    beginSignals = await fetchSSE('/auth/login/begin', { email });
+  } catch (e) {
+    setSignal('loginError', `Could not start sign-in: ${e.message}`);
+    return;
+  }
+
+  const { challengeId, loginOptions } = beginSignals;
+  if (!challengeId || !loginOptions) {
+    setSignal('loginError', 'Server did not return sign-in options.');
+    return;
+  }
+
+  // 2. Sign the challenge with the authenticator
+  let credential;
+  try {
+    credential = await navigator.credentials.get(toRequestOptions(loginOptions));
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      setSignal('loginError', 'Sign-in was cancelled.');
+    } else {
+      setSignal('loginError', `Sign-in failed: ${e.message}`);
+    }
+    return;
+  }
+
+  if (!credential) {
+    setSignal('loginError', 'No credential was returned by the authenticator.');
+    return;
+  }
+
+  // 3. Complete authentication (server sets HttpOnly auth cookie and redirects)
+  try {
+    await fetchSSE('/auth/login/complete', {
+      challenge_id: challengeId,
+      response: serializeAuthentication(credential),
+    });
+  } catch (e) {
+    setSignal('loginError', `Sign-in failed: ${e.message}`);
+  }
+}
+
+// ── Datastar plugin registration ───────────────────────────────────────────────
+
+const plugins = [
+  { name: 'passkeyRegister', apply: doRegister },
+  { name: 'passkeyLogin',    apply: doLogin    },
+];
+
+// Import `action` from Datastar. Using a dynamic import so we can handle
+// failures gracefully. The URL must match the one in the HTML <script> tag.
+let registered = false;
+try {
+  const ds = await import(DATASTAR_URL);
+  if (typeof ds.action === 'function') {
+    plugins.forEach((p) => ds.action(p));
+    registered = true;
+  }
+} catch (_) {
+  // Module import failed (e.g. offline, URL mismatch) — fall through to global
+}
+
+if (!registered) {
+  // Fallback: try the global Datastar object (set by non-module bundle variants)
+  const ds = window.Datastar;
+  if (ds) {
+    const reg =
+      ds.action?.bind(ds) ??
+      ((p) => ds.addPlugin?.({ type: 'action', ...p })) ??
+      ((p) => ds.registerPlugin?.({ type: 'action', ...p }));
+    plugins.forEach(reg);
+    registered = true;
+  }
+}
+
+if (!registered) {
+  console.error(
+    '[passkey-plugin] Could not register actions: Datastar not found.',
+    'Ensure Datastar is loaded before this script.',
+  );
+}

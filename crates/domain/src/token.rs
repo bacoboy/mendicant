@@ -41,3 +41,26 @@ impl RefreshToken {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refresh_token_new_not_revoked() {
+        let uid = UserId::new();
+        let t = RefreshToken::new(uid.clone(), Role::Free, 9999999999);
+        assert!(!t.revoked);
+        assert_eq!(t.user_id, uid);
+        assert_eq!(t.role, Role::Free);
+        assert_eq!(t.expires_at, 9999999999);
+    }
+
+    #[test]
+    fn refresh_token_jti_is_unique() {
+        let uid = UserId::new();
+        let a = RefreshToken::new(uid.clone(), Role::Free, 0);
+        let b = RefreshToken::new(uid, Role::Free, 0);
+        assert_ne!(a.jti, b.jti);
+    }
+}

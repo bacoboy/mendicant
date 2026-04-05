@@ -48,3 +48,31 @@ impl Challenge {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn registration_challenge_has_no_user_id() {
+        let c = Challenge::new_registration("{}".into(), 9999999999);
+        assert_eq!(c.challenge_type, ChallengeType::Registration);
+        assert!(c.user_id.is_none());
+        assert_eq!(c.state_json, "{}");
+    }
+
+    #[test]
+    fn authentication_challenge_carries_user_id() {
+        let uid = "user-abc".to_string();
+        let c = Challenge::new_authentication(uid.clone(), "{}".into(), 9999999999);
+        assert_eq!(c.challenge_type, ChallengeType::Authentication);
+        assert_eq!(c.user_id.as_deref(), Some("user-abc"));
+    }
+
+    #[test]
+    fn each_challenge_has_unique_id() {
+        let a = Challenge::new_registration("{}".into(), 0);
+        let b = Challenge::new_registration("{}".into(), 0);
+        assert_ne!(a.id, b.id);
+    }
+}

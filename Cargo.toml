@@ -25,7 +25,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # ids and time
 uuid = { version = "1", features = ["v4", "serde"] }
-time = { version = "0.3", features = ["serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 
 # aws
 aws-config = "1"

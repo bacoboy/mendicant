@@ -29,12 +29,12 @@
     <label for="display-name">Display name</label>
     <input id="display-name" type="text" data-bind="displayName" placeholder="Alice" autocomplete="name">
 
-    <button type="button" data-on-click="@passkeyRegister()">Register with Passkey</button>
+    <button type="button" data-on-click="@passkeyRegister($email, $displayName)">Register with Passkey</button>
 
     <p class="switch">Already have an account? <a href="/">Sign in</a></p>
   </div>
 
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@sudodevnull/datastar"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.8/bundles/datastar.js"></script>
   <script type="module" src="/static/passkey-plugin.js"></script>
 </body>
 </html>
