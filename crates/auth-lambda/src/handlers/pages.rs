@@ -1,5 +1,10 @@
+use askama::Template;
 use axum::Router;
+use axum::extract::Query;
+use axum::http::StatusCode;
+use axum::response::{Html, IntoResponse};
 use axum::routing::get;
+use std::collections::HashMap;
 
 use crate::state::AppState;
 
@@ -10,14 +15,41 @@ pub fn routes() -> Router<AppState> {
         .route("/activate", get(activate_page))
 }
 
-async fn login_page() -> &'static str {
-    todo!("render login page HTML")
+#[derive(Template)]
+#[template(path = "login.html")]
+struct LoginPage;
+
+#[derive(Template)]
+#[template(path = "register.html")]
+struct RegisterPage;
+
+#[derive(Template)]
+#[template(path = "activate.html")]
+struct ActivatePage {
+    prefill_code: String,
 }
 
-async fn register_page() -> &'static str {
-    todo!("render register page HTML")
+async fn login_page() -> impl IntoResponse {
+    render(LoginPage)
 }
 
-async fn activate_page() -> &'static str {
-    todo!("render OAuth device activation page HTML")
+async fn register_page() -> impl IntoResponse {
+    render(RegisterPage)
+}
+
+async fn activate_page(
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let prefill_code = params.get("code").cloned().unwrap_or_default();
+    render(ActivatePage { prefill_code })
+}
+
+fn render(t: impl Template) -> impl IntoResponse {
+    match t.render() {
+        Ok(html) => Html(html).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "template render failed");
+            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+        }
+    }
 }

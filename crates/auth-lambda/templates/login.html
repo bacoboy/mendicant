@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in – Mendicant</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 400px; margin: 10vh auto; padding: 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+    label { display: block; margin-bottom: .25rem; font-size: .9rem; color: #555; }
+    input { width: 100%; box-sizing: border-box; padding: .5rem; font-size: 1rem;
+            border: 1px solid #ccc; border-radius: 4px; margin-bottom: 1rem; }
+    button { width: 100%; padding: .65rem; font-size: 1rem; background: #0070f3;
+             color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0051a2; }
+    .error { color: #c00; font-size: .9rem; margin-top: .5rem; }
+    .switch { margin-top: 1.25rem; font-size: .9rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Sign in to Mendicant</h1>
+
+  <div data-signals='{"email":"","loginOptions":null,"challengeId":"","loginError":""}'>
+    <div data-show="$loginError !== ''" class="error" data-text="$loginError"></div>
+
+    <label for="email">Email</label>
+    <input id="email" type="email" data-bind="email" placeholder="you@example.com" autocomplete="username webauthn">
+
+    <button type="button" data-on-click="@passkeyLogin()">Sign in with Passkey</button>
+
+    <p class="switch">No account? <a href="/register">Register</a></p>
+  </div>
+
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@sudodevnull/datastar"></script>
+  <script type="module" src="/static/passkey-plugin.js"></script>
+</body>
+</html>

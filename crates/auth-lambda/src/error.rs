@@ -3,6 +3,7 @@ use axum::response::{IntoResponse, Response};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum AppError {
     #[error("not found")]
     NotFound,

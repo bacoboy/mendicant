@@ -40,7 +40,7 @@ axum = "0.8"
 # auth
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 jsonwebtoken = "9"
-rsa = { version = "0.9", features = ["pem", "pkcs8"] }
+rsa = { version = "0.9", features = ["pem"] }
 
 # templating
 askama = "0.12"

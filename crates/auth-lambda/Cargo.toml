@@ -27,4 +27,5 @@ axum = { workspace = true }
 webauthn-rs = { workspace = true }
 jsonwebtoken = { workspace = true }
 rsa = { workspace = true }
+base64 = { workspace = true }
 askama = { workspace = true }

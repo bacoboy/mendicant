@@ -17,8 +17,14 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
 aws-config = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
+aws-sdk-kms = { workspace = true }
 lambda_http = { workspace = true }
 axum = { workspace = true }
+jsonwebtoken = { workspace = true }
+rsa = { workspace = true }
+base64 = { workspace = true }
 askama = { workspace = true }

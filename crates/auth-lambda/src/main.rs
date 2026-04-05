@@ -3,7 +3,9 @@ use lambda_http::{Error, run, tracing as lambda_tracing};
 
 mod error;
 mod handlers;
+mod jwt;
 mod signing;
+mod sse;
 mod state;
 
 use state::AppState;
