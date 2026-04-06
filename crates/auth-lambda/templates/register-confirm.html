@@ -36,10 +36,12 @@
       window.Datastar = ds;
       window.root = ds.root;
 
-      // Extract token from URL
+      // Extract token from URL and set it
       const params = new URLSearchParams(window.location.search);
       const token = params.get('token') || '';
-      window.root.setSignals({token});
+      if (window.root && token) {
+        window.root.token = token;
+      }
 
       console.log('[register-confirm] Datastar loaded, token:', token);
     }).catch(e => console.error('Failed to load Datastar:', e));
