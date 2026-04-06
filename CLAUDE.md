@@ -26,7 +26,7 @@ Mendicant is a multi-region serverless platform built on AWS. This repository co
 docker compose up -d          # DynamoDB Local on localhost:8000
 
 # Run a lambda with hot reload (acts as local HTTP server)
-cargo lambda watch
+cargo lambda watch --port 8000
 
 # Run all tests
 cargo test
@@ -38,7 +38,7 @@ cargo test -p domain
 cargo test -p domain test_name
 
 # Build a lambda (for deployment)
-cargo lambda build -p auth-lambda --release
+cargo lambda lambda build -p auth-lambda --release
 ```
 
 Two environment variables control local vs AWS mode:
@@ -46,6 +46,31 @@ Two environment variables control local vs AWS mode:
 - `JWT_SIGNING_KEY_PATH=/path/to/dev-key.pem` — uses local RSA key instead of KMS
 
 When these are absent the code uses real AWS services.
+
+### HTTPS for Local WebAuthn Testing
+
+Safari requires HTTPS for WebAuthn (even on localhost). Use Caddy as a reverse proxy:
+
+```bash
+# Install Caddy
+brew install caddy
+
+# Create Caddyfile for HTTPS on port 9000
+cat > Caddyfile << 'EOF'
+localhost:9000 {
+  reverse_proxy localhost:8000
+}
+EOF
+
+# Run Caddy (auto-generates HTTPS certificates)
+caddy run
+
+# Set environment variables
+export RP_ORIGIN=https://localhost:9000
+export RP_ID=localhost
+```
+
+Then access the site at `https://localhost:9000`. Caddy auto-generates self-signed certs, so accept the browser warnings.
 
 ## Terraform
 
@@ -116,6 +141,20 @@ Endpoints serving the web frontend return Datastar SSE streams (`Content-Type: t
 ### WebAuthn + Datastar
 
 WebAuthn requires `navigator.credentials` browser API calls which cannot be expressed in pure HTML attributes. A small Datastar plugin (single `<script>` tag alongside the Datastar script, no app-specific code) adds `@passkeyRegister()` and `@passkeyLogin()` actions. All application HTML uses only `data-*` attributes — no inline or separate JavaScript written per-feature.
+
+### WebAuthn Browser Compatibility
+
+**Safari/Firefox requirements:**
+- Requires HTTPS (localhost exception with proper cert setup)
+- RP_ORIGIN must match the access URL exactly (e.g., `https://localhost:9000`)
+- Do not send non-standard WebAuthn extensions in options (Safari rejects them) — the server filters extensions in all three `*_begin` handlers
+- Browser may show authenticator prompts (Face ID, Touch ID, security key) even for duplicate registrations; validation happens server-side
+
+**Validation order (prevent wasted user interactions):**
+1. `register_begin`: Check if email already registered → return BadRequest immediately
+2. Only then generate challenge and send to browser
+3. Browser shows authenticator prompt
+4. `register_complete`: Final server-side verification (email check redundant but safe)
 
 ### Multi-Region Design Principles
 

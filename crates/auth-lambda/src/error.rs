@@ -1,5 +1,5 @@
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::{IntoResponse, Response, Redirect};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,12 +20,11 @@ pub enum AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let status = match &self {
-            Self::NotFound => StatusCode::NOT_FOUND,
-            Self::Unauthorized => StatusCode::UNAUTHORIZED,
-            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (status, self.to_string()).into_response()
+        match &self {
+            Self::Unauthorized => Redirect::to("/login").into_response(),
+            Self::NotFound => (StatusCode::NOT_FOUND, "Not Found").into_response(),
+            Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()).into_response(),
+            Self::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()).into_response(),
+        }
     }
 }

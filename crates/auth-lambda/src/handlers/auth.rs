@@ -19,6 +19,7 @@ use domain::user::User;
 
 use crate::error::AppError;
 use crate::jwt::issue_tokens;
+use crate::middleware::AuthUser;
 use crate::sse::SseResponse;
 use crate::state::AppState;
 
@@ -30,6 +31,8 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/register/complete", post(register_complete))
         .route("/auth/login/begin", post(login_begin))
         .route("/auth/login/complete", post(login_complete))
+        .route("/auth/passkey/add/begin", post(add_passkey_begin))
+        .route("/auth/passkey/add/complete", post(add_passkey_complete))
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────
@@ -55,6 +58,14 @@ async fn register_begin(
     State(state): State<AppState>,
     Json(req): Json<RegisterBeginRequest>,
 ) -> Result<SseResponse, AppError> {
+    // Check if email is already registered
+    let users_repo = UserRepository::new(state.db.clone());
+    if users_repo.get_by_email(&req.email).await.is_ok() {
+        return Err(AppError::BadRequest(
+            format!("Email {} is already registered", req.email)
+        ));
+    }
+
     let user_uuid = uuid::Uuid::new_v4();
     let exclude = existing_cred_ids(&state, &req.email).await;
 
@@ -83,9 +94,20 @@ async fn register_begin(
             anyhow::anyhow!("failed to store challenge: {:?}", e)
         })?;
 
+    // Convert ccr to JSON and remove extensions (Safari compatibility)
+    let mut register_opts = serde_json::to_value(&ccr)
+        .context("failed to serialize CreationChallengeResponse")?;
+    if let Some(obj) = register_opts.as_object_mut() {
+        if let Some(pk) = obj.get_mut("publicKey") {
+            if let Some(pk_obj) = pk.as_object_mut() {
+                pk_obj.remove("extensions");
+            }
+        }
+    }
+
     let signals = serde_json::json!({
         "challengeId": challenge_id,
-        "registerOptions": ccr,
+        "registerOptions": register_opts,
     });
 
     Ok(SseResponse::new().patch_signals(&signals.to_string()))
@@ -111,15 +133,17 @@ async fn register_complete(
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
     let users_repo = UserRepository::new(state.db.clone());
-    let user = match users_repo.get_by_email(&bundled.email).await {
-        Ok(u) => u,
-        Err(DbError::NotFound) => {
-            let u = User::new(bundled.email.clone(), bundled.display_name.clone());
-            users_repo.put(&u).await.context("failed to create user")?;
-            u
-        }
-        Err(e) => return Err(AppError::Internal(e.into())),
-    };
+
+    // Check if email is already registered
+    if let Ok(_) = users_repo.get_by_email(&bundled.email).await {
+        return Err(AppError::BadRequest(
+            format!("Email {} is already registered", bundled.email)
+        ));
+    }
+
+    // Create new user
+    let user = User::new(bundled.email.clone(), bundled.display_name.clone());
+    users_repo.put(&user).await.context("failed to create user")?;
 
     let cred_id = CredentialId(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(passkey.cred_id()),
@@ -158,7 +182,7 @@ async fn register_complete(
     let secure = is_secure_context();
     Ok(SseResponse::new()
         .with_auth_cookie(&tokens.access_token, secure)
-        .redirect("/"))
+        .redirect("/me"))
 }
 
 #[derive(Deserialize)]
@@ -202,9 +226,20 @@ async fn login_begin(
         .await
         .context("failed to store challenge")?;
 
+    // Convert rcr to JSON and remove extensions (Safari compatibility)
+    let mut login_opts = serde_json::to_value(&rcr)
+        .context("failed to serialize RequestChallengeResponse")?;
+    if let Some(obj) = login_opts.as_object_mut() {
+        if let Some(pk) = obj.get_mut("publicKey") {
+            if let Some(pk_obj) = pk.as_object_mut() {
+                pk_obj.remove("extensions");
+            }
+        }
+    }
+
     let signals = serde_json::json!({
         "challengeId": challenge_id,
-        "loginOptions": rcr,
+        "loginOptions": login_opts,
     });
 
     Ok(SseResponse::new().patch_signals(&signals.to_string()))
@@ -334,7 +369,134 @@ async fn login_complete(
     let secure = is_secure_context();
     Ok(SseResponse::new()
         .with_auth_cookie(&tokens.access_token, secure)
-        .redirect("/"))
+        .redirect("/me"))
+}
+
+// ── Add Passkey (for authenticated users) ─────────────────────────────────────
+
+/// POST /auth/passkey/add/begin — start a WebAuthn registration for an existing user
+async fn add_passkey_begin(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+) -> Result<SseResponse, AppError> {
+    let user_id = uuid::Uuid::parse_str(&claims.sub)
+        .map_err(|_| AppError::BadRequest("invalid user ID in token".into()))?;
+
+    // Get existing credentials to exclude them from new registration
+    let exclude = CredentialRepository::new(state.db.clone())
+        .list_for_user(&domain::user::UserId(user_id))
+        .await
+        .ok()
+        .and_then(|creds| {
+            let ids: Vec<CredentialID> = creds
+                .iter()
+                .filter_map(|c| {
+                    base64::engine::general_purpose::URL_SAFE_NO_PAD
+                        .decode(&c.id.0)
+                        .ok()
+                        .map(CredentialID::from)
+                })
+                .collect();
+            if ids.is_empty() { None } else { Some(ids) }
+        });
+
+    let (ccr, reg_state) = state
+        .webauthn
+        .start_passkey_registration(user_id, &claims.email, &claims.email, exclude)
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+    let bundled = RegChallengeState {
+        email: claims.email.clone(),
+        display_name: claims.email.clone(),
+        state: reg_state,
+    };
+    let state_json = serde_json::to_string(&bundled)
+        .context("failed to serialize registration state")?;
+
+    let expires_at = OffsetDateTime::now_utc().unix_timestamp() + CHALLENGE_TTL_SECS;
+    let challenge = Challenge::new_registration(state_json, expires_at);
+    let challenge_id = challenge.id.clone();
+
+    ChallengeRepository::new(state.db.clone())
+        .put(&challenge)
+        .await
+        .context("failed to store challenge")?;
+
+    // Convert ccr to JSON and remove extensions (Safari compatibility)
+    let mut register_opts = serde_json::to_value(&ccr)
+        .context("failed to serialize CreationChallengeResponse")?;
+    if let Some(obj) = register_opts.as_object_mut() {
+        if let Some(pk) = obj.get_mut("publicKey") {
+            if let Some(pk_obj) = pk.as_object_mut() {
+                pk_obj.remove("extensions");
+            }
+        }
+    }
+
+    let signals = serde_json::json!({
+        "challengeId": challenge_id,
+        "registerOptions": register_opts,
+    });
+
+    Ok(SseResponse::new().patch_signals(&signals.to_string()))
+}
+
+#[derive(Deserialize)]
+struct AddPasskeyCompleteRequest {
+    challenge_id: String,
+    response: RegisterPublicKeyCredential,
+}
+
+/// POST /auth/passkey/add/complete — complete passkey registration for authenticated user
+async fn add_passkey_complete(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    Json(req): Json<AddPasskeyCompleteRequest>,
+) -> Result<SseResponse, AppError> {
+    let user_id = uuid::Uuid::parse_str(&claims.sub)
+        .map(domain::user::UserId)
+        .map_err(|_| AppError::BadRequest("invalid user ID in token".into()))?;
+
+    let challenge = ChallengeRepository::new(state.db.clone())
+        .take(&req.challenge_id)
+        .await
+        .map_err(|_| AppError::BadRequest("invalid or expired challenge".into()))?;
+
+    let bundled: RegChallengeState = serde_json::from_str(&challenge.state_json)
+        .context("failed to deserialize registration state")?;
+
+    let passkey = state
+        .webauthn
+        .finish_passkey_registration(&req.response, &bundled.state)
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+    let cred_id = CredentialId(
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(passkey.cred_id()),
+    );
+
+    let passkey_bytes = serde_json::to_vec(&passkey)
+        .context("failed to serialize passkey")?;
+    let now = OffsetDateTime::now_utc();
+
+    let credential = Credential {
+        id: cred_id,
+        user_id,
+        public_key: passkey_bytes,
+        sign_count: 0,
+        aaguid: uuid::Uuid::nil(),
+        nickname: None,
+        created_at: now,
+        last_used_at: now,
+    };
+
+    CredentialRepository::new(state.db.clone())
+        .put(&credential)
+        .await
+        .context("failed to store credential")?;
+
+    Ok(SseResponse::new()
+        .patch_signals(r#"{"addPasskeySuccess": true}"#)
+        .redirect("/me"))
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

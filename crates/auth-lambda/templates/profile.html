@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile – Mendicant</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 500px; margin: 5vh auto; padding: 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 2rem; }
+    .error-alert { background: #fee; color: #c00; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; border: 1px solid #fcc; display: none; }
+    .error-alert.show { display: block; }
+    .profile-section { background: #f5f5f5; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; }
+    .profile-field { margin-bottom: 1rem; }
+    .profile-label { font-size: .9rem; color: #555; margin-bottom: .25rem; }
+    .profile-value { font-size: 1rem; word-break: break-word; }
+    .profile-value.monospace { font-family: monospace; font-size: .9rem; }
+    .button-group { display: flex; gap: 1rem; }
+    button { padding: .65rem 1.5rem; font-size: 1rem; border: none; border-radius: 4px; cursor: pointer; }
+    .btn-primary { background: #0070f3; color: #fff; }
+    .btn-primary:hover { background: #0051a2; }
+    .btn-secondary { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
+    .btn-secondary:hover { background: #e0e0e0; }
+    .links { margin-top: 2rem; text-align: center; font-size: .9rem; }
+    .links a { margin: 0 .5rem; color: #0070f3; text-decoration: none; }
+    .links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Your Profile</h1>
+
+  <div id="error-alert" class="error-alert"></div>
+
+  <div class="profile-section">
+    <div class="profile-field">
+      <div class="profile-label">Name</div>
+      <div class="profile-value">{{ display_name }}</div>
+    </div>
+
+    <div class="profile-field">
+      <div class="profile-label">Email</div>
+      <div class="profile-value">{{ email }}</div>
+    </div>
+
+    <div class="profile-field">
+      <div class="profile-label">Role</div>
+      <div class="profile-value">{{ role }}</div>
+    </div>
+
+    <div class="profile-field">
+      <div class="profile-label">Status</div>
+      <div class="profile-value">{{ status }}</div>
+    </div>
+
+    <div class="profile-field">
+      <div class="profile-label">User ID</div>
+      <div class="profile-value monospace">{{ id }}</div>
+    </div>
+  </div>
+
+  <div class="button-group">
+    <button class="btn-primary" onclick="addPasskey()" id="add-passkey-btn">Add Passkey</button>
+    <form method="POST" action="/logout" style="display: inline;">
+      <button type="submit" class="btn-secondary">Sign Out</button>
+    </form>
+  </div>
+
+  <div class="links">
+    <a href="/">Home</a>
+  </div>
+
+  <!-- Debug section (remove in production) -->
+  <div style="margin-top: 3rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: .85rem;">
+    <h3 style="margin-top: 0;">Debug Info (dev only)</h3>
+    <p><strong>JWT Claims:</strong></p>
+    <pre style="background: white; padding: .5rem; border-radius: 2px; overflow-x: auto; margin: .5rem 0;">sub: {{ debug_jwt_sub }}
+email: {{ debug_jwt_email }}
+role: {{ debug_jwt_role }}</pre>
+    <p><strong>Database User:</strong></p>
+    <pre style="background: white; padding: .5rem; border-radius: 2px; overflow-x: auto; margin: .5rem 0;">id: {{ id }}
+email: {{ email }}
+display_name: {{ display_name }}
+role: {{ role }}
+status: {{ status }}</pre>
+  </div>
+
+  <script>
+    // Helper to convert base64url to Uint8Array
+    function b64urlToBytes(str) {
+      const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      const bin = atob(padded);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    // Helper to convert Uint8Array to base64url
+    function bytesToB64url(buf) {
+      const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      let b64 = '';
+      const CHUNK = 0x8000;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+      }
+      return btoa(b64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    // Show error alert
+    function showError(message) {
+      const alert = document.getElementById('error-alert');
+      alert.textContent = message;
+      alert.classList.add('show');
+      setTimeout(() => alert.classList.remove('show'), 5000); // Auto-hide after 5 seconds
+    }
+
+    // Add passkey for authenticated user
+    async function addPasskey() {
+      const btn = document.getElementById('add-passkey-btn');
+      const alert = document.getElementById('error-alert');
+      alert.classList.remove('show');
+      btn.disabled = true;
+      btn.textContent = 'Adding passkey...';
+
+      try {
+        // Step 1: Get the registration challenge
+        const beginResp = await fetch('/auth/passkey/add/begin', { method: 'POST' });
+        if (!beginResp.ok) throw new Error('Failed to start registration');
+
+        // Parse SSE response
+        const text = await beginResp.text();
+        console.log('SSE response:', text);
+        const match = text.match(/data: signals ({.*})/);
+        if (!match) throw new Error('Invalid challenge response');
+        const signals = JSON.parse(match[1]);
+        let options = signals.registerOptions;
+
+        console.log('Register options:', options);
+        console.log('Keys:', Object.keys(options || {}));
+
+        // Handle nested publicKey field if present
+        if (options.publicKey) {
+          options = options.publicKey;
+          console.log('Extracted publicKey options:', options);
+        }
+
+        // Log what we actually have
+        console.log('Options object keys:', Object.keys(options || {}));
+        console.log('Full options:', JSON.stringify(options, null, 2));
+
+        // Convert challenge and userID from base64url
+        if (!options.challenge) throw new Error('No challenge in response: ' + JSON.stringify(options));
+        if (!options.user?.id) throw new Error('No user.id in response');
+
+        console.log('Before conversion - challenge type:', typeof options.challenge, 'value:', options.challenge);
+        console.log('Before conversion - user.id type:', typeof options.user.id, 'value:', options.user.id);
+
+        // Only convert if they're strings
+        if (typeof options.challenge === 'string') {
+          options.challenge = b64urlToBytes(options.challenge);
+        }
+        if (typeof options.user.id === 'string') {
+          options.user.id = b64urlToBytes(options.user.id);
+        }
+
+        console.log('After conversion - challenge type:', options.challenge.constructor.name, 'length:', options.challenge.length);
+        console.log('After conversion - user.id type:', options.user.id.constructor.name, 'length:', options.user.id.length);
+
+        // Convert exclude credentials
+        if (options.excludeCredentials && Array.isArray(options.excludeCredentials)) {
+          options.excludeCredentials = options.excludeCredentials.map(cred => ({
+            ...cred,
+            id: b64urlToBytes(cred.id)
+          }));
+        }
+
+        // Remove extensions that Safari doesn't support
+        // Keep only standard WebAuthn extensions
+        if (options.extensions) {
+          const standardExtensions = {};
+          const standardNames = ['credProps', 'hmacGetSecret', 'hmacSecret', 'minPinLength'];
+          for (const key of standardNames) {
+            if (key in options.extensions) {
+              standardExtensions[key] = options.extensions[key];
+            }
+          }
+          options.extensions = standardExtensions;
+        }
+
+        // Step 2: Create credential with navigator
+        console.log('About to call navigator.credentials.create with options:', { publicKey: options });
+        let credential;
+        try {
+          credential = await navigator.credentials.create({ publicKey: options });
+        } catch (e) {
+          console.error('navigator.credentials.create error:', e.name, e.message);
+          throw new Error(`Credential creation failed: ${e.name}: ${e.message}`);
+        }
+
+        if (!credential) throw new Error('Credential creation was cancelled');
+        console.log('Credential created:', credential);
+
+        // Step 3: Send credential to server
+        const serialized = {
+          id: credential.id,
+          rawId: bytesToB64url(credential.rawId),
+          type: credential.type,
+          authenticatorAttachment: credential.authenticatorAttachment ?? null,
+          clientExtensionResults: credential.getClientExtensionResults?.() ?? {},
+          response: {
+            attestationObject: bytesToB64url(credential.response.attestationObject),
+            clientDataJSON: bytesToB64url(credential.response.clientDataJSON),
+            ...(credential.response.getTransports ? { transports: credential.response.getTransports() } : {})
+          }
+        };
+        console.log('Serialized credential:', serialized);
+
+        const body = JSON.stringify({
+          challenge_id: signals.challengeId,
+          response: serialized
+        });
+        console.log('Request body length:', body.length);
+
+        const completeResp = await fetch('/auth/passkey/add/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body
+        });
+
+        if (completeResp.ok) {
+          // Wait for redirect
+          setTimeout(() => { window.location.href = '/me'; }, 100);
+        } else {
+          const error = await completeResp.text();
+          throw new Error(error || 'Failed to register passkey');
+        }
+      } catch (e) {
+        console.error('Passkey registration failed:', e);
+        showError('Failed to add passkey: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Add Passkey';
+      }
+    }
+  </script>
+
+  <script type="module">
+    import('/static/datastar.js').then(ds => {
+      window.Datastar = ds;
+      window.root = ds.root;
+    }).catch(e => console.error('Failed to load Datastar:', e));
+  </script>
+</body>
+</html>

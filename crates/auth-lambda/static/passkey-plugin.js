@@ -62,6 +62,21 @@ function toCreationOptions(serverResponse) {
       id: b64urlToBytes(c.id),
     }));
   }
+  // Filter extensions to only standard WebAuthn names (Safari compatibility)
+  if (pk.extensions) {
+    const standardExtensions = {};
+    const standardNames = ['credProps', 'hmacGetSecret', 'hmacSecret', 'minPinLength'];
+    for (const key of standardNames) {
+      if (key in pk.extensions) {
+        standardExtensions[key] = pk.extensions[key];
+      }
+    }
+    if (Object.keys(standardExtensions).length > 0) {
+      pk.extensions = standardExtensions;
+    } else {
+      delete pk.extensions;
+    }
+  }
   return { publicKey: pk };
 }
 
@@ -77,6 +92,21 @@ function toRequestOptions(serverResponse) {
       ...c,
       id: b64urlToBytes(c.id),
     }));
+  }
+  // Filter extensions to only standard WebAuthn names (Safari compatibility)
+  if (pk.extensions) {
+    const standardExtensions = {};
+    const standardNames = ['credProps', 'hmacGetSecret', 'hmacSecret', 'minPinLength'];
+    for (const key of standardNames) {
+      if (key in pk.extensions) {
+        standardExtensions[key] = pk.extensions[key];
+      }
+    }
+    if (Object.keys(standardExtensions).length > 0) {
+      pk.extensions = standardExtensions;
+    } else {
+      delete pk.extensions;
+    }
   }
   return { publicKey: pk };
 }
