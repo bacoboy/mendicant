@@ -10,11 +10,13 @@ use webauthn_rs::prelude::*;
 
 use db::challenges::ChallengeRepository;
 use db::credentials::CredentialRepository;
+use db::email_tokens::EmailTokenRepository;
 use db::error::DbError;
 use db::refresh_tokens::RefreshTokenRepository;
 use db::users::UserRepository;
 use domain::challenge::Challenge;
 use domain::credential::{Credential, CredentialId};
+use domain::email_token::EmailToken;
 use domain::user::User;
 
 use crate::error::AppError;
@@ -24,9 +26,11 @@ use crate::sse::SseResponse;
 use crate::state::AppState;
 
 const CHALLENGE_TTL_SECS: i64 = 300; // 5 minutes
+const EMAIL_TOKEN_TTL_SECS: i64 = 900; // 15 minutes
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/auth/register/email", post(register_email))
         .route("/auth/register/begin", post(register_begin))
         .route("/auth/register/complete", post(register_complete))
         .route("/auth/login/begin", post(login_begin))
@@ -35,12 +39,72 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/passkey/add/complete", post(add_passkey_complete))
 }
 
+// ── Email Validation ──────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct RegisterEmailRequest {
+    email: String,
+    display_name: String,
+}
+
+#[derive(Serialize)]
+struct RegisterEmailResponse {
+    token: String,
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
+}
+
+/// POST /auth/register/email — validates email availability and creates a validation token.
+/// In dev, returns the token in response. In production, sends via SES email.
+async fn register_email(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterEmailRequest>,
+) -> Result<Json<RegisterEmailResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // Check if email is already registered
+    let users_repo = UserRepository::new(state.db.clone());
+    if users_repo.get_by_email(&req.email).await.is_ok() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "An account with this email already exists".into(),
+            }),
+        ));
+    }
+
+    // Create email token
+    let expires_at = OffsetDateTime::now_utc().unix_timestamp() + EMAIL_TOKEN_TTL_SECS;
+    let token = EmailToken::new(req.email.clone(), req.display_name.clone(), expires_at);
+    let token_id = token.id.clone();
+
+    EmailTokenRepository::new(state.db.clone())
+        .put(&token)
+        .await
+        .map_err(|_| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to create validation token. Please try again.".into(),
+                }),
+            )
+        })?;
+
+    // TODO: Send email via AWS SES with link: /register-confirm?token={token_id}
+    // For now, return token in response for testing
+    tracing::info!("email validation token created for {}: {}", req.email, token_id);
+
+    Ok(Json(RegisterEmailResponse {
+        token: token_id,
+    }))
+}
+
 // ── Registration ──────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
 struct RegisterBeginRequest {
-    email: String,
-    display_name: String,
+    token: String,
 }
 
 /// State bundled into the challenge record. Binding email to the challenge
@@ -54,29 +118,39 @@ struct RegChallengeState {
 
 /// Returns a WebAuthn registration challenge as a Datastar SSE stream
 /// that patches the page signals with the challenge options.
+/// Requires a valid email token from the email validation step.
 async fn register_begin(
     State(state): State<AppState>,
     Json(req): Json<RegisterBeginRequest>,
 ) -> Result<SseResponse, AppError> {
-    // Check if email is already registered
+    // Look up and consume the email token
+    let email_token = EmailTokenRepository::new(state.db.clone())
+        .take(&req.token)
+        .await
+        .map_err(|_| AppError::BadRequest("invalid or expired email token".into()))?;
+
+    let email = email_token.email.clone();
+    let display_name = email_token.display_name.clone();
+
+    // Double-check email is not already registered (as of now)
     let users_repo = UserRepository::new(state.db.clone());
-    if users_repo.get_by_email(&req.email).await.is_ok() {
+    if users_repo.get_by_email(&email).await.is_ok() {
         return Err(AppError::BadRequest(
-            format!("Email {} is already registered", req.email)
+            "An account with this email already exists".into()
         ));
     }
 
     let user_uuid = uuid::Uuid::new_v4();
-    let exclude = existing_cred_ids(&state, &req.email).await;
+    let exclude = existing_cred_ids(&state, &email).await;
 
     let (ccr, reg_state) = state
         .webauthn
-        .start_passkey_registration(user_uuid, &req.email, &req.display_name, exclude)
+        .start_passkey_registration(user_uuid, &email, &display_name, exclude)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
     let bundled = RegChallengeState {
-        email: req.email,
-        display_name: req.display_name,
+        email,
+        display_name,
         state: reg_state,
     };
     let state_json = serde_json::to_string(&bundled)

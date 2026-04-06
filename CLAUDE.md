@@ -55,22 +55,30 @@ Safari requires HTTPS for WebAuthn (even on localhost). Use Caddy as a reverse p
 # Install Caddy
 brew install caddy
 
-# Create Caddyfile for HTTPS on port 9000
-cat > Caddyfile << 'EOF'
-localhost:9000 {
-  reverse_proxy localhost:8000
-}
-EOF
-
+# Caddyfile is committed to the repo (localhost:9000 HTTP, localhost:9001 HTTPS)
 # Run Caddy (auto-generates HTTPS certificates)
 caddy run
 
-# Set environment variables
-export RP_ORIGIN=https://localhost:9000
+# Set environment variables for cargo lambda
+export DYNAMODB_ENDPOINT_URL=http://localhost:8000
+export JWT_SIGNING_KEY_PATH=./dev-key.pem
+export RP_ORIGIN=https://localhost:9001
 export RP_ID=localhost
+export TABLE_USERS=users
+export TABLE_CREDENTIALS=credentials
+export TABLE_REFRESH_TOKENS=refresh_tokens
+export TABLE_CHALLENGES=challenges
+export TABLE_EMAIL_TOKENS=email_tokens
+export TABLE_OAUTH_DEVICES=oauth_devices
+export ENVIRONMENT=dev
 ```
 
-Then access the site at `https://localhost:9000`. Caddy auto-generates self-signed certs, so accept the browser warnings.
+Then access the site at `https://localhost:9001`. Caddy auto-generates self-signed certs, so accept the browser warnings.
+
+**Port reference:**
+- `localhost:8000` — cargo lambda (HTTP, internal only)
+- `localhost:9000` — Caddy HTTP reverse proxy (for dev testing without HTTPS)
+- `localhost:9001` — Caddy HTTPS reverse proxy (required for Safari WebAuthn)
 
 ## Terraform
 

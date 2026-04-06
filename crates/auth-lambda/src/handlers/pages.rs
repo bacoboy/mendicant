@@ -19,6 +19,7 @@ pub fn routes() -> Router<AppState> {
         .route("/", get(landing_page))
         .route("/login", get(login_page))
         .route("/register", get(register_page))
+        .route("/register-confirm", get(register_confirm_page))
         .route("/activate", get(activate_page))
         .route("/me", get(profile_page))
         .route("/logout", post(logout))
@@ -35,6 +36,10 @@ struct LoginPage;
 #[derive(Template)]
 #[template(path = "register.html")]
 struct RegisterPage;
+
+#[derive(Template)]
+#[template(path = "register-confirm.html")]
+struct RegisterConfirmPage;
 
 #[derive(Template)]
 #[template(path = "activate.html")]
@@ -66,6 +71,10 @@ async fn login_page() -> impl IntoResponse {
 
 async fn register_page() -> impl IntoResponse {
     render(RegisterPage)
+}
+
+async fn register_confirm_page() -> impl IntoResponse {
+    render(RegisterConfirmPage)
 }
 
 async fn activate_page(

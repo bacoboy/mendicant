@@ -13,6 +13,7 @@
     button { width: 100%; padding: .65rem; font-size: 1rem; background: #0070f3;
              color: #fff; border: none; border-radius: 4px; cursor: pointer; }
     button:hover { background: #0051a2; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
     .error { color: #c00; font-size: .9rem; margin-top: .5rem; }
     .switch { margin-top: 1.25rem; font-size: .9rem; text-align: center; }
   </style>
@@ -20,16 +21,16 @@
 <body>
   <h1>Create your account</h1>
 
-  <div data-signals='{"email":"","displayName":"","registerOptions":null,"challengeId":"","registerError":""}'>
-    <div data-show="$registerError !== ''" class="error" data-text="$registerError"></div>
+  <div data-signals='{"email":"","displayName":"","emailError":""}'>
+    <div data-show="$emailError !== ''" class="error" data-text="$emailError"></div>
 
     <label for="email">Email</label>
-    <input id="email" type="email" data-bind="email" placeholder="you@example.com" autocomplete="username webauthn">
+    <input id="email" type="email" data-bind="email" placeholder="you@example.com" autocomplete="username">
 
     <label for="display-name">Display name</label>
     <input id="display-name" type="text" data-bind="displayName" placeholder="Alice" autocomplete="name">
 
-    <button type="button" data-on-click="@passkeyRegister($email, $displayName)">Register with Passkey</button>
+    <button type="button" data-on-click="registerEmail">Continue</button>
 
     <p class="switch">Already have an account? <a href="/">Sign in</a></p>
   </div>

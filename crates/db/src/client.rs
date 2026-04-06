@@ -11,6 +11,7 @@ pub struct DynamoClient {
     pub credentials_table: String,
     pub refresh_tokens_table: String,
     pub challenges_table: String,
+    pub email_tokens_table: String,
     pub oauth_devices_table: String,
 }
 
@@ -19,7 +20,7 @@ impl DynamoClient {
     ///
     /// Expected env vars:
     ///   TABLE_USERS, TABLE_CREDENTIALS, TABLE_REFRESH_TOKENS,
-    ///   TABLE_CHALLENGES, TABLE_OAUTH_DEVICES
+    ///   TABLE_CHALLENGES, TABLE_EMAIL_TOKENS, TABLE_OAUTH_DEVICES
     pub fn from_env(client: Client) -> Self {
         Self {
             inner: client,
@@ -30,6 +31,8 @@ impl DynamoClient {
                 .expect("TABLE_REFRESH_TOKENS not set"),
             challenges_table: std::env::var("TABLE_CHALLENGES")
                 .expect("TABLE_CHALLENGES not set"),
+            email_tokens_table: std::env::var("TABLE_EMAIL_TOKENS")
+                .expect("TABLE_EMAIL_TOKENS not set"),
             oauth_devices_table: std::env::var("TABLE_OAUTH_DEVICES")
                 .expect("TABLE_OAUTH_DEVICES not set"),
         }

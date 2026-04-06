@@ -237,9 +237,110 @@ function setSignal(name, value) {
 // ── Action implementations ─────────────────────────────────────────────────────
 
 /**
+ * @registerEmail(email, displayName)
+ *
+ * Email validation step:
+ *   1. POST /auth/register/email  → returns token
+ *   2. Redirect to /register-confirm?token={token}
+ */
+async function doRegisterEmail(ctx, email, displayName) {
+  setSignal('emailError', '');
+
+  if (!email) {
+    setSignal('emailError', 'Please enter your email address.');
+    return;
+  }
+
+  try {
+    const response = await fetch('/auth/register/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        display_name: displayName || email.split('@')[0],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setSignal('emailError', data.message || 'Failed to validate email. Please try again.');
+      return;
+    }
+
+    // Success: redirect to confirm page with token
+    window.location.href = `/register-confirm?token=${data.token}`;
+  } catch (e) {
+    setSignal('emailError', `Error: ${e.message}`);
+  }
+}
+
+/**
+ * @passkeyRegisterWithToken(token)
+ *
+ * Passkey registration with email token:
+ *   1. POST /auth/register/begin  → challenge (uses token)
+ *   2. navigator.credentials.create()
+ *   3. POST /auth/register/complete → auth cookie + redirect
+ */
+async function doRegisterWithToken(ctx, token) {
+  setSignal('registerError', '');
+
+  if (!token) {
+    setSignal('registerError', 'Invalid registration link. Please start over.');
+    return;
+  }
+
+  // 1. Begin registration
+  let beginSignals;
+  try {
+    beginSignals = await fetchSSE('/auth/register/begin', {
+      token,
+    });
+  } catch (e) {
+    setSignal('registerError', `Could not start registration: ${e.message}`);
+    return;
+  }
+
+  const { challengeId, registerOptions } = beginSignals;
+  if (!challengeId || !registerOptions) {
+    setSignal('registerError', 'Server did not return registration options.');
+    return;
+  }
+
+  // 2. Create credential in the authenticator
+  let credential;
+  try {
+    credential = await navigator.credentials.create(toCreationOptions(registerOptions));
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      setSignal('registerError', 'Passkey creation was cancelled.');
+    } else {
+      setSignal('registerError', `Passkey creation failed: ${e.message}`);
+    }
+    return;
+  }
+
+  if (!credential) {
+    setSignal('registerError', 'No credential was returned by the authenticator.');
+    return;
+  }
+
+  // 3. Complete registration (server sets HttpOnly auth cookie and redirects)
+  try {
+    await fetchSSE('/auth/register/complete', {
+      challenge_id: challengeId,
+      response: serializeRegistration(credential),
+    });
+  } catch (e) {
+    setSignal('registerError', `Registration failed: ${e.message}`);
+  }
+}
+
+/**
  * @passkeyRegister(email, displayName)
  *
- * Full passkey registration flow:
+ * Full passkey registration flow (legacy):
  *   1. POST /auth/register/begin  → challenge
  *   2. navigator.credentials.create()
  *   3. POST /auth/register/complete → auth cookie + redirect
@@ -359,20 +460,45 @@ async function doLogin(ctx) {
 
 // Wait for DOM to be ready, then set up event listeners
 document.addEventListener('DOMContentLoaded', () => {
-  // Find register button
-  const registerBtn = document.querySelector('button[data-on-click*="passkeyRegister"]');
+  // Find email registration button (exact match)
+  const emailRegisterBtn = document.querySelector('button[data-on-click="registerEmail"]');
+  if (emailRegisterBtn) {
+    emailRegisterBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = window.root?.email || window.Datastar?.root?.email;
+      const displayName = window.root?.displayName || window.Datastar?.root?.displayName;
+      console.log('[passkey-plugin] Email register clicked:', { email, displayName });
+      await doRegisterEmail(null, email, displayName);
+    });
+    console.log('[passkey-plugin] Email register button listener attached');
+  }
+
+  // Find token-based passkey registration button (exact match)
+  const tokenRegisterBtn = document.querySelector('button[data-on-click="passkeyRegisterWithToken"]');
+  if (tokenRegisterBtn) {
+    tokenRegisterBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const token = window.root?.token || window.Datastar?.root?.token;
+      console.log('[passkey-plugin] Token register clicked:', { token });
+      await doRegisterWithToken(null, token);
+    });
+    console.log('[passkey-plugin] Token register button listener attached');
+  }
+
+  // Find register button (substring match for @passkeyRegister, but not passkeyRegisterWithToken)
+  const registerBtn = document.querySelector('button[data-on-click*="passkeyRegister"]:not([data-on-click*="WithToken"])');
   if (registerBtn) {
     registerBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-      const email = window.Datastar.root.email;
-      const displayName = window.Datastar.root.displayName;
+      const email = window.root?.email || window.Datastar?.root?.email;
+      const displayName = window.root?.displayName || window.Datastar?.root?.displayName;
       console.log('[passkey-plugin] Register clicked:', { email, displayName });
       await doRegister(null, email, displayName);
     });
     console.log('[passkey-plugin] Register button listener attached');
   }
 
-  // Find login button
+  // Find login button (substring match for @passkeyLogin)
   const loginBtn = document.querySelector('button[data-on-click*="passkeyLogin"]');
   if (loginBtn) {
     loginBtn.addEventListener('click', async (e) => {

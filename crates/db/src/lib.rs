@@ -2,6 +2,7 @@ pub mod attr;
 pub mod challenges;
 pub mod client;
 pub mod credentials;
+pub mod email_tokens;
 pub mod error;
 pub mod oauth_devices;
 pub mod refresh_tokens;
