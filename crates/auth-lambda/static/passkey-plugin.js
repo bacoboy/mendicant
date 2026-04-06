@@ -243,7 +243,7 @@ function setSignal(name, value) {
  *   1. POST /auth/register/email  → returns token
  *   2. Redirect to /register-confirm?token={token}
  */
-async function doRegisterEmail(ctx, email, displayName) {
+async function doRegisterEmail(ctx, email) {
   setSignal('emailError', '');
 
   if (!email) {
@@ -255,16 +255,13 @@ async function doRegisterEmail(ctx, email, displayName) {
     const response = await fetch('/auth/register/email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        display_name: displayName || email.split('@')[0],
-      }),
+      body: JSON.stringify({ email }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      setSignal('emailError', data.message || 'Failed to validate email. Please try again.');
+      setSignal('emailError', data.error || 'Failed to validate email. Please try again.');
       return;
     }
 
@@ -291,11 +288,18 @@ async function doRegisterWithToken(ctx, token) {
     return;
   }
 
+  const displayName = window.root?.displayName || window.Datastar?.root?.displayName;
+  if (!displayName) {
+    setSignal('registerError', 'Please enter your display name.');
+    return;
+  }
+
   // 1. Begin registration
   let beginSignals;
   try {
     beginSignals = await fetchSSE('/auth/register/begin', {
       token,
+      display_name: displayName,
     });
   } catch (e) {
     setSignal('registerError', `Could not start registration: ${e.message}`);
@@ -466,9 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
     emailRegisterBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       const email = window.root?.email || window.Datastar?.root?.email;
-      const displayName = window.root?.displayName || window.Datastar?.root?.displayName;
-      console.log('[passkey-plugin] Email register clicked:', { email, displayName });
-      await doRegisterEmail(null, email, displayName);
+      console.log('[passkey-plugin] Email register clicked:', { email });
+      await doRegisterEmail(null, email);
     });
     console.log('[passkey-plugin] Email register button listener attached');
   }

@@ -21,14 +21,11 @@
 <body>
   <h1>Create your account</h1>
 
-  <div data-signals='{"email":"","displayName":"","emailError":""}'>
+  <div data-signals='{"email":"","emailError":""}'>
     <div data-show="$emailError !== ''" class="error" data-text="$emailError"></div>
 
-    <label for="email">Email</label>
+    <label for="email">Email address</label>
     <input id="email" type="email" data-bind="email" placeholder="you@example.com" autocomplete="username">
-
-    <label for="display-name">Display name</label>
-    <input id="display-name" type="text" data-bind="displayName" placeholder="Alice" autocomplete="name">
 
     <button type="button" data-on-click="registerEmail">Continue</button>
 

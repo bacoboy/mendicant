@@ -19,7 +19,6 @@ fn email_token_to_item(t: &EmailToken) -> Item {
     let mut m = HashMap::new();
     m.insert("pk".into(), pk(&t.id));
     m.insert("email".into(), AttributeValue::S(t.email.clone()));
-    m.insert("display_name".into(), AttributeValue::S(t.display_name.clone()));
     m.insert("expires_at".into(), AttributeValue::N(t.expires_at.to_string()));
     m
 }
@@ -34,7 +33,6 @@ fn item_to_email_token(item: Item) -> Result<EmailToken, DbError> {
     Ok(EmailToken {
         id,
         email: get_s(&item, "email")?,
-        display_name: get_s(&item, "display_name")?,
         expires_at: get_n_i64(&item, "expires_at")?,
     })
 }

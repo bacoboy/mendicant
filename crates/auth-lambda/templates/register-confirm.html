@@ -18,12 +18,15 @@
 <body>
   <h1>Register your passkey</h1>
 
-  <div data-signals='{"token":"","registerOptions":null,"challengeId":"","registerError":""}'>
+  <div data-signals='{"token":"","displayName":"","registerOptions":null,"challengeId":"","registerError":""}'>
     <div class="info">
-      Email verified! Now register a passkey to complete your account setup.
+      Email verified! Now set your display name and register a passkey.
     </div>
 
     <div data-show="$registerError !== ''" class="error" data-text="$registerError"></div>
+
+    <label for="display-name">Display name</label>
+    <input id="display-name" type="text" data-bind="displayName" placeholder="Alice" autocomplete="name">
 
     <button type="button" data-on-click="passkeyRegisterWithToken">Register Passkey</button>
   </div>

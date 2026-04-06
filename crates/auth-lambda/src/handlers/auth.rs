@@ -44,7 +44,6 @@ pub fn routes() -> Router<AppState> {
 #[derive(Deserialize)]
 struct RegisterEmailRequest {
     email: String,
-    display_name: String,
 }
 
 #[derive(Serialize)]
@@ -74,9 +73,9 @@ async fn register_email(
         ));
     }
 
-    // Create email token
+    // Create email token (display name will be provided later on confirmation page)
     let expires_at = OffsetDateTime::now_utc().unix_timestamp() + EMAIL_TOKEN_TTL_SECS;
-    let token = EmailToken::new(req.email.clone(), req.display_name.clone(), expires_at);
+    let token = EmailToken::new(req.email.clone(), expires_at);
     let token_id = token.id.clone();
 
     EmailTokenRepository::new(state.db.clone())
@@ -105,6 +104,7 @@ async fn register_email(
 #[derive(Deserialize)]
 struct RegisterBeginRequest {
     token: String,
+    display_name: String,
 }
 
 /// State bundled into the challenge record. Binding email to the challenge
@@ -118,7 +118,7 @@ struct RegChallengeState {
 
 /// Returns a WebAuthn registration challenge as a Datastar SSE stream
 /// that patches the page signals with the challenge options.
-/// Requires a valid email token from the email validation step.
+/// Requires a valid email token from the email validation step and a display name.
 async fn register_begin(
     State(state): State<AppState>,
     Json(req): Json<RegisterBeginRequest>,
@@ -130,7 +130,7 @@ async fn register_begin(
         .map_err(|_| AppError::BadRequest("invalid or expired email token".into()))?;
 
     let email = email_token.email.clone();
-    let display_name = email_token.display_name.clone();
+    let display_name = req.display_name.clone();
 
     // Double-check email is not already registered (as of now)
     let users_repo = UserRepository::new(state.db.clone());

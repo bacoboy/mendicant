@@ -7,17 +7,15 @@ use uuid::Uuid;
 pub struct EmailToken {
     pub id: String,
     pub email: String,
-    pub display_name: String,
     /// Unix timestamp — also used as DynamoDB TTL attribute.
     pub expires_at: i64,
 }
 
 impl EmailToken {
-    pub fn new(email: String, display_name: String, expires_at: i64) -> Self {
+    pub fn new(email: String, expires_at: i64) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             email,
-            display_name,
             expires_at,
         }
     }
