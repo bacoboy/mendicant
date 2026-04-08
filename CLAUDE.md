@@ -12,7 +12,7 @@ Mendicant is a multi-region serverless platform built on AWS. This repository co
 
 ## Technology Stack
 
-- **Backend:** Rust, AWS Lambda via `cargo-lambda` (Docker containers later)
+- **Backend:** Rust, AWS Lambda deployed as Docker containers
 - **API:** AWS HTTP API Gateway (pay-per-request)
 - **Database:** DynamoDB (pay-per-request), Global Tables for persistent data, regional tables for short-lived data
 - **IaC:** Terraform `>= 1.9.0`, AWS provider `~> 6.0`
@@ -21,24 +21,34 @@ Mendicant is a multi-region serverless platform built on AWS. This repository co
 
 ## Local Development (no AWS required)
 
+The local stack simulates the production AWS architecture exactly:
+- **Caddy** (HTTPS) → **local-apigw proxy** (HTTP→Lambda event) → **Lambda container** (AWS RIE) → **DynamoDB Local**
+
+Each HTTP request becomes one discrete Lambda invocation. Lambda REPORT lines appear in `docker compose logs auth-lambda` per request.
+
 ```bash
-# Start local dependencies
-docker compose up -d          # DynamoDB Local on localhost:8000
+# 1. Start everything (builds Lambda container, starts DynamoDB, proxy, Caddy)
+docker compose up -d
 
-# Run a lambda with hot reload (acts as local HTTP server)
-cargo lambda watch --port 8000
+# 2. Access the site
+open https://localhost:9001   # accept the browser cert warning (or: docker compose exec caddy caddy trust)
+```
 
-# Run all tests
-cargo test
+**After code changes:**
+```bash
+docker compose restart auth-lambda   # rebuilds the Lambda image
+```
 
-# Run tests for one crate
-cargo test -p domain
+**Viewing Lambda logs and REPORT output:**
+```bash
+docker compose logs -f auth-lambda
+```
 
-# Run a single test
-cargo test -p domain test_name
-
-# Build a lambda (for deployment)
-cargo lambda lambda build -p auth-lambda --release
+**Running tests** (DynamoDB must be running via docker compose):
+```bash
+cargo test                    # all tests
+cargo test -p domain          # one crate
+cargo test -p domain test_name  # one test
 ```
 
 Two environment variables control local vs AWS mode:
@@ -47,38 +57,11 @@ Two environment variables control local vs AWS mode:
 
 When these are absent the code uses real AWS services.
 
-### HTTPS for Local WebAuthn Testing
-
-Safari requires HTTPS for WebAuthn (even on localhost). Use Caddy as a reverse proxy:
-
-```bash
-# Install Caddy
-brew install caddy
-
-# Caddyfile is committed to the repo (localhost:9000 HTTP, localhost:9001 HTTPS)
-# Run Caddy (auto-generates HTTPS certificates)
-caddy run
-
-# Set environment variables for cargo lambda
-export DYNAMODB_ENDPOINT_URL=http://localhost:8000
-export JWT_SIGNING_KEY_PATH=./dev-key.pem
-export RP_ORIGIN=https://localhost:9001
-export RP_ID=localhost
-export TABLE_USERS=users
-export TABLE_CREDENTIALS=credentials
-export TABLE_REFRESH_TOKENS=refresh_tokens
-export TABLE_CHALLENGES=challenges
-export TABLE_EMAIL_TOKENS=email_tokens
-export TABLE_OAUTH_DEVICES=oauth_devices
-export ENVIRONMENT=dev
-```
-
-Then access the site at `https://localhost:9001`. Caddy auto-generates self-signed certs, so accept the browser warnings.
-
 **Port reference:**
-- `localhost:8000` — cargo lambda (HTTP, internal only)
-- `localhost:9000` — Caddy HTTP reverse proxy (for dev testing without HTTPS)
-- `localhost:9001` — Caddy HTTPS reverse proxy (required for Safari WebAuthn)
+- `localhost:8000` — DynamoDB Local (also used by `cargo test`)
+- `localhost:3000` — local-apigw proxy (internal, no need to access directly)
+- `localhost:9000` — Caddy HTTP (for dev testing without HTTPS)
+- `localhost:9001` — Caddy HTTPS (required for Safari WebAuthn)
 
 ## Terraform
 

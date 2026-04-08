@@ -1,5 +1,17 @@
-# HTTPS reverse proxy (required for Safari WebAuthn)
-# cargo lambda runs on 9000
+# Bind on all interfaces so Docker port mappings reach the container.
+{
+    default_bind 0.0.0.0
+    admin off
+}
+
+# HTTP — for non-Safari dev testing
+localhost:9000 {
+    reverse_proxy api-gateway:3000
+}
+
+# HTTPS — required for Safari WebAuthn (navigator.credentials)
+# Caddy auto-generates a local CA cert. Accept the browser warning, or:
+#   docker compose exec caddy caddy trust
 localhost:9001 {
-    reverse_proxy localhost:9000
+    reverse_proxy api-gateway:3000
 }

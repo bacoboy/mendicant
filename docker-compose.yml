@@ -5,3 +5,56 @@ services:
     ports:
       - "8000:8000"
     command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+
+  # Lambda container using the AWS Runtime Interface Emulator (RIE).
+  # Each HTTP request from api-gateway becomes one discrete Lambda invocation.
+  auth-lambda:
+    build:
+      context: .
+      dockerfile: Dockerfile.auth-lambda
+    volumes:
+      - ./dev-key.pem:/var/task/dev-key.pem
+    environment:
+      DYNAMODB_ENDPOINT_URL: http://dynamodb-local:8000
+      JWT_SIGNING_KEY_PATH: /var/task/dev-key.pem
+      RP_ORIGIN: https://localhost:9001
+      RP_ID: localhost
+      TABLE_USERS: users
+      TABLE_CREDENTIALS: credentials
+      TABLE_REFRESH_TOKENS: refresh_tokens
+      TABLE_CHALLENGES: challenges
+      TABLE_EMAIL_TOKENS: email_tokens
+      TABLE_OAUTH_DEVICES: oauth_devices
+      ENVIRONMENT: dev
+    depends_on:
+      - dynamodb-local
+
+  # Translates HTTP requests into API Gateway v2 events and invokes the Lambda RIE.
+  api-gateway:
+    build:
+      context: tools/local-apigw
+    environment:
+      LAMBDA_ENDPOINT: http://auth-lambda:8080/2015-03-31/functions/function/invocations
+      RUST_LOG: local_apigw=info
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-lambda
+
+  # HTTPS reverse proxy. Required for Safari WebAuthn (navigator.credentials needs HTTPS).
+  # Accept the browser cert warning on first use, or run: docker compose exec caddy caddy trust
+  caddy:
+    image: caddy:alpine
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api-gateway
+
+volumes:
+  caddy_data:
+  caddy_config:

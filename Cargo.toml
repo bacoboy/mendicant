@@ -45,6 +45,10 @@ rsa = { version = "0.9", features = ["pem"] }
 # templating
 askama = "0.12"
 
+# vendored openssl — compiles openssl from source so the build doesn't depend
+# on system openssl headers (required for cargo-lambda / Zig cross-compilation)
+openssl = { version = "0.10", features = ["vendored"] }
+
 # internal crates
 domain = { path = "crates/domain" }
 db = { path = "crates/db" }

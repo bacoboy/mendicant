@@ -1,0 +1,10 @@
+FROM ghcr.io/cargo-lambda/cargo-lambda:latest AS builder
+RUN apt-get update && apt-get install -y pkg-config perl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+RUN cargo lambda build --release -p auth-lambda --arm64
+
+FROM public.ecr.aws/lambda/provided:al2023
+COPY --from=builder /app/target/lambda/auth-lambda/bootstrap /var/runtime/bootstrap
+CMD ["bootstrap"]
