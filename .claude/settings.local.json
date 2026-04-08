@@ -22,7 +22,13 @@
       "Bash(curl -fsSL -I \"https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.8/bundles/datastar.js\")",
       "Bash(/Users/steve/workspace/mendicant/scripts/setup-dynamodb-local.sh:*)",
       "Bash(chmod +x /Users/steve/workspace/mendicant/scripts/setup-dynamodb-local.sh)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(timeout 2 ./target/debug/local-apigw)",
+      "Bash(cargo lambda:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(/dev/null ls:*)",
+      "Bash(grep:*)"
     ]
   }
 }
