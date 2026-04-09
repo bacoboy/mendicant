@@ -45,7 +45,29 @@ bash scripts/setup-dynamodb-local.sh
 
 This creates the 6 tables for local development and enables TTL attributes.
 
-### 4. Access the application
+### 4. Bootstrap the first administrator
+
+The admin account is created out-of-band — not via the public registration flow. Run the bootstrap tool once after the tables are set up:
+
+```bash
+DYNAMODB_ENDPOINT_URL=http://localhost:8000 \
+TABLE_USERS=users \
+TABLE_CREDENTIALS=credentials \
+TABLE_REFRESH_TOKENS=refresh_tokens \
+TABLE_CHALLENGES=challenges \
+TABLE_EMAIL_TOKENS=email_tokens \
+TABLE_OAUTH_DEVICES=oauth_devices \
+SITE_URL=https://localhost:9001 \
+cargo run -p bootstrap -- admin@example.com --display-name "Admin"
+```
+
+The tool prints a single-use enrollment URL valid for 60 minutes (pass `--ttl-minutes N` to change). Open that URL in the browser with your YubiKey attached, then click **Register YubiKey**. In local dev the AAGUID check is skipped so any authenticator works; in production only hardware YubiKeys are accepted.
+
+Re-run the tool any time to generate a fresh token (if the previous one expired or enrollment failed). The admin user record is reused — a new token is all that is issued.
+
+**Adding more admin YubiKeys** (after first enrollment): sign in, go to `/me`, and add another passkey using the existing add-passkey flow. Each credential is stored independently.
+
+### 5. Access the application
 
 ```bash
 open https://localhost:9001
@@ -56,7 +78,7 @@ Accept the browser cert warning on first use, or run:
 docker compose exec caddy caddy trust
 ```
 
-### 5. Viewing Lambda logs
+### 6. Viewing Lambda logs
 
 Each HTTP request produces a REPORT line showing invocation time:
 
@@ -64,7 +86,7 @@ Each HTTP request produces a REPORT line showing invocation time:
 docker compose logs -f auth-lambda
 ```
 
-### 6. Rebuilding the Lambda after code changes
+### 7. Rebuilding the Lambda after code changes
 
 ```bash
 docker compose restart auth-lambda   # rebuilds the Docker image
@@ -146,6 +168,7 @@ crates/
   db/           # DynamoDB repositories built on domain types.
   auth-lambda/  # WebAuthn passkeys, OAuth device flow, JWT issuance, HTML pages.
   users-lambda/ # User/account management (admin + self-service profile).
+  bootstrap/    # CLI tool: create first admin user + emit YubiKey enrollment URL.
 
 infrastructure/
   modules/
@@ -182,6 +205,8 @@ The `regional` module is instantiated once per region using explicit provider al
 | `RP_ID` | WebAuthn Relying Party ID (e.g. `example.com`) |
 | `RP_ORIGIN` | WebAuthn origin (e.g. `https://example.com`) |
 | `BASE_URL` | Public base URL for activation links |
+| `ENVIRONMENT` | Set to `dev` to disable HTTPS-only cookies and AAGUID enforcement |
+| `ALLOWED_AAGUIDS` | Comma-separated UUIDs allowed for admin enrollment (overrides built-in Yubico list) |
 
 In production, `KMS_SIGNING_KEY_ID` is used. In local dev, `JWT_SIGNING_KEY_PATH` takes precedence.
 
@@ -198,6 +223,9 @@ In production, `KMS_SIGNING_KEY_ID` is used. In local dev, `JWT_SIGNING_KEY_PATH
 
 **OAuth device flow (CLI):**
 `POST /oauth/device` → display `user_code` → poll `POST /oauth/token` → user approves at `/activate` → CLI receives access + refresh tokens
+
+**Admin YubiKey enrollment (first-run only):**
+Run `cargo run -p bootstrap -- <email>` → copy the printed URL → open it in a browser with YubiKey inserted → touch the key. The bootstrap tool writes the admin user directly to DynamoDB; the enrollment endpoint verifies the WebAuthn response and enforces YubiKey-only AAGUID in production.
 
 **Token verification:**
 `GET /.well-known/jwks.json` — public JWK for RS256 verification. KMS Multi-Region keys mean tokens issued in any region are verifiable everywhere.

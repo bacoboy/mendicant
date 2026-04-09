@@ -23,6 +23,7 @@ fn challenge_to_item(c: &Challenge) -> Item {
         AttributeValue::S(match c.challenge_type {
             ChallengeType::Registration => "registration".into(),
             ChallengeType::Authentication => "authentication".into(),
+            ChallengeType::AdminEnrollment => "admin_enrollment".into(),
         }),
     );
     m.insert("state_json".into(), AttributeValue::S(c.state_json.clone()));
@@ -43,6 +44,7 @@ fn item_to_challenge(item: Item) -> Result<Challenge, DbError> {
     let challenge_type = match get_s(&item, "challenge_type")?.as_str() {
         "registration" => ChallengeType::Registration,
         "authentication" => ChallengeType::Authentication,
+        "admin_enrollment" => ChallengeType::AdminEnrollment,
         other => return Err(DbError::Serde(format!("unknown challenge_type: {other}"))),
     };
 

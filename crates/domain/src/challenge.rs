@@ -6,6 +6,9 @@ use uuid::Uuid;
 pub enum ChallengeType {
     Registration,
     Authentication,
+    /// One-time token created by the bootstrap tool to enrol an admin YubiKey.
+    /// Stored in the challenges table; consumed atomically on enrol begin.
+    AdminEnrollment,
 }
 
 /// A short-lived WebAuthn challenge stored in the regional challenges table.
@@ -47,6 +50,19 @@ impl Challenge {
             expires_at,
         }
     }
+
+    /// Creates a one-time admin enrollment token. No webauthn state — `state_json`
+    /// is empty. The token is consumed atomically when the admin clicks enrol,
+    /// and the `user_id` is carried into the subsequent WebAuthn challenge.
+    pub fn new_admin_enrollment(user_id: String, expires_at: i64) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            challenge_type: ChallengeType::AdminEnrollment,
+            state_json: String::new(),
+            user_id: Some(user_id),
+            expires_at,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -74,5 +90,14 @@ mod tests {
         let a = Challenge::new_registration("{}".into(), 0);
         let b = Challenge::new_registration("{}".into(), 0);
         assert_ne!(a.id, b.id);
+    }
+
+    #[test]
+    fn admin_enrollment_challenge_carries_user_id_and_empty_state() {
+        let uid = "user-xyz".to_string();
+        let c = Challenge::new_admin_enrollment(uid.clone(), 9999999999);
+        assert_eq!(c.challenge_type, ChallengeType::AdminEnrollment);
+        assert_eq!(c.user_id.as_deref(), Some("user-xyz"));
+        assert!(c.state_json.is_empty());
     }
 }

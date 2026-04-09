@@ -1,0 +1,19 @@
+[package]
+name = "bootstrap"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "bootstrap"
+path = "src/main.rs"
+
+[dependencies]
+domain = { workspace = true }
+db = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+time = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
+clap = { workspace = true }
+openssl = { workspace = true }

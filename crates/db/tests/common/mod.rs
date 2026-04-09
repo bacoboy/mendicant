@@ -76,6 +76,7 @@ impl TestEnv {
             credentials_table: format!("test-creds-{suffix}"),
             refresh_tokens_table: format!("test-tokens-{suffix}"),
             challenges_table: format!("test-challenges-{suffix}"),
+            email_tokens_table: format!("test-email-tokens-{suffix}"),
             oauth_devices_table: format!("test-devices-{suffix}"),
         };
 
@@ -93,6 +94,7 @@ impl Drop for TestEnv {
             self.db.credentials_table.clone(),
             self.db.refresh_tokens_table.clone(),
             self.db.challenges_table.clone(),
+            self.db.email_tokens_table.clone(),
             self.db.oauth_devices_table.clone(),
         ];
 
@@ -166,6 +168,17 @@ async fn create_tables(client: &Client, db: &DynamoClient) {
         .send()
         .await
         .expect("create challenges table");
+
+    // email_tokens: single HASH key only
+    client
+        .create_table()
+        .table_name(&db.email_tokens_table)
+        .billing_mode(BillingMode::PayPerRequest)
+        .attribute_definitions(attr("pk"))
+        .key_schema(hash_key("pk"))
+        .send()
+        .await
+        .expect("create email_tokens table");
 
     // oauth_devices: single HASH key + user_code GSI
     client

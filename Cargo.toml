@@ -4,6 +4,7 @@ members = [
     "crates/db",
     "crates/auth-lambda",
     "crates/users-lambda",
+    "crates/bootstrap",
 ]
 resolver = "2"
 
@@ -44,6 +45,9 @@ rsa = { version = "0.9", features = ["pem"] }
 
 # templating
 askama = "0.12"
+
+# cli
+clap = { version = "4", features = ["derive", "env"] }
 
 # vendored openssl — compiles openssl from source so the build doesn't depend
 # on system openssl headers (required for cargo-lambda / Zig cross-compilation)

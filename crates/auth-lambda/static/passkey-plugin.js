@@ -460,6 +460,67 @@ async function doLogin(ctx) {
   }
 }
 
+/**
+ * @adminEnroll()
+ *
+ * Admin YubiKey enrollment flow:
+ *   1. POST /admin/enroll/begin  → challenge (consumes the enrollment token)
+ *   2. navigator.credentials.create()
+ *   3. POST /admin/enroll/complete → auth cookie + redirect to /me
+ */
+async function doAdminEnroll(ctx) {
+  setSignal('enrollError', '');
+
+  const token = window.root?.enrollToken || window.Datastar?.root?.enrollToken;
+  if (!token) {
+    setSignal('enrollError', 'Missing enrollment token. Use the URL provided by the bootstrap tool.');
+    return;
+  }
+
+  // 1. Begin enrollment (consumes the single-use token)
+  let beginSignals;
+  try {
+    beginSignals = await fetchSSE('/admin/enroll/begin', { token });
+  } catch (e) {
+    setSignal('enrollError', `Could not start enrollment: ${e.message}`);
+    return;
+  }
+
+  const { challengeId, registerOptions } = beginSignals;
+  if (!challengeId || !registerOptions) {
+    setSignal('enrollError', 'Server did not return enrollment options.');
+    return;
+  }
+
+  // 2. Create the credential on the YubiKey
+  let credential;
+  try {
+    credential = await navigator.credentials.create(toCreationOptions(registerOptions));
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      setSignal('enrollError', 'YubiKey enrollment was cancelled or timed out.');
+    } else {
+      setSignal('enrollError', `YubiKey enrollment failed: ${e.message}`);
+    }
+    return;
+  }
+
+  if (!credential) {
+    setSignal('enrollError', 'No credential was returned by the authenticator.');
+    return;
+  }
+
+  // 3. Complete enrollment (server verifies AAGUID, sets auth cookie, redirects)
+  try {
+    await fetchSSE('/admin/enroll/complete', {
+      challenge_id: challengeId,
+      response: serializeRegistration(credential),
+    });
+  } catch (e) {
+    setSignal('enrollError', `Enrollment failed: ${e.message}`);
+  }
+}
+
 // ── Event listener setup ──────────────────────────────────────────────────────
 
 // Wait for DOM to be ready, then set up event listeners
@@ -514,6 +575,17 @@ document.addEventListener('DOMContentLoaded', () => {
       await doLogin(null);
     });
     console.log('[passkey-plugin] Login button listener attached');
+  }
+
+  // Find admin enrollment button
+  const adminEnrollBtn = document.querySelector('button[data-on-click="adminEnroll"]');
+  if (adminEnrollBtn) {
+    adminEnrollBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      console.log('[passkey-plugin] Admin enroll clicked');
+      await doAdminEnroll(null);
+    });
+    console.log('[passkey-plugin] Admin enroll button listener attached');
   }
 
   console.log('[passkey-plugin] Event listeners set up successfully');
