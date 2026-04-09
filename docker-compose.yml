@@ -26,7 +26,7 @@ services:
       TABLE_EMAIL_TOKENS: email_tokens
       TABLE_OAUTH_DEVICES: oauth_devices
       ENVIRONMENT: dev
-      REQUIRE_YUBIKEY: "true"
+      REQUIRE_YUBIKEY: "false"
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: us-east-2
@@ -54,6 +54,7 @@ services:
       - "9001:9001"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./crates/auth-lambda/static:/srv/static
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

@@ -12,6 +12,18 @@ locals {
     challenges     = aws_dynamodb_table.challenges.name
     oauth_devices  = aws_dynamodb_table.oauth_devices.name
   }
+
+  # Common environment variables shared by both Lambda functions.
+  # Reference as: environment { variables = local.lambda_env }
+  lambda_env = {
+    TABLE_USERS           = local.table_names.users
+    TABLE_CREDENTIALS     = local.table_names.credentials
+    TABLE_REFRESH_TOKENS  = local.table_names.refresh_tokens
+    TABLE_CHALLENGES      = local.table_names.challenges
+    TABLE_EMAIL_TOKENS    = local.table_names.email_tokens
+    TABLE_OAUTH_DEVICES   = local.table_names.oauth_devices
+    AWS_USE_DUALSTACK_ENDPOINT = "true"
+  }
 }
 
 # ── IAM execution role (shared by both Lambdas) ───────────────────────────────

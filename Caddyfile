@@ -6,12 +6,24 @@
 
 # HTTP — for non-Safari dev testing
 localhost:9000 {
-    reverse_proxy api-gateway:3000
+    handle /static/* {
+        root * /srv
+        file_server
+    }
+    handle {
+        reverse_proxy api-gateway:3000
+    }
 }
 
 # HTTPS — required for Safari WebAuthn (navigator.credentials)
 # Caddy auto-generates a local CA cert. Accept the browser warning, or:
 #   docker compose exec caddy caddy trust
 localhost:9001 {
-    reverse_proxy api-gateway:3000
+    handle /static/* {
+        root * /srv
+        file_server
+    }
+    handle {
+        reverse_proxy api-gateway:3000
+    }
 }

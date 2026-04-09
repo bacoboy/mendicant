@@ -578,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Find admin enrollment button
-  const adminEnrollBtn = document.querySelector('button[data-on-click="adminEnroll"]');
+  const adminEnrollBtn = document.getElementById('enroll-btn');
   if (adminEnrollBtn) {
     adminEnrollBtn.addEventListener('click', async (e) => {
       e.preventDefault();

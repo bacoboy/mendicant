@@ -106,7 +106,10 @@ async fn enroll_begin(
     let enrollment = challenges_repo
         .take(&req.token)
         .await
-        .map_err(|_| AppError::BadRequest("invalid or expired enrollment token".into()))?;
+        .map_err(|e| {
+            tracing::error!("enroll_begin: take token {:?} failed: {:?}", req.token, e);
+            AppError::BadRequest("invalid or expired enrollment token".into())
+        })?;
 
     if enrollment.challenge_type != ChallengeType::AdminEnrollment {
         return Err(AppError::BadRequest("invalid token type".into()));

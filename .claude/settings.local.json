@@ -43,7 +43,12 @@
       "Bash(docker image ls:*)",
       "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test6@example.com\"}')",
       "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test7@example.com\"}')",
-      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email*)"
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email*)",
+      "Read(//tmp/**)",
+      "Bash(docker exec mendicant-auth-lambda-1:*)",
+      "Bash(curl:*)",
+      "Bash(aws dynamodb scan:*)",
+      "Bash(AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws dynamodb scan:*)"
     ]
   }
 }
