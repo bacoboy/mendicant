@@ -27,15 +27,15 @@ mod tests {
 
     #[test]
     fn email_token_has_unique_id() {
-        let a = EmailToken::new("test@example.com".into(), "Alice".into(), 9999999999);
-        let b = EmailToken::new("test@example.com".into(), "Alice".into(), 9999999999);
+        let a = EmailToken::new("test@example.com".into(), 9999999999);
+        let b = EmailToken::new("test@example.com".into(), 9999999999);
         assert_ne!(a.id, b.id);
     }
 
     #[test]
-    fn email_token_stores_email_and_display_name() {
-        let token = EmailToken::new("alice@example.com".into(), "Alice".into(), 9999999999);
+    fn email_token_stores_email_and_expiry() {
+        let token = EmailToken::new("alice@example.com".into(), 9999999999);
         assert_eq!(token.email, "alice@example.com");
-        assert_eq!(token.display_name, "Alice");
+        assert_eq!(token.expires_at, 9999999999);
     }
 }

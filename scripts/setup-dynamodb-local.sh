@@ -122,19 +122,19 @@ echo
 
 # Users table
 ensure_table "users" \
-    "AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S AttributeName=email,AttributeType=S" \
+    "AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S" \
     "AttributeName=pk,KeyType=HASH AttributeName=sk,KeyType=RANGE"
 ensure_gsi "users" "email-index" "{AttributeName=email,KeyType=HASH}"
 
 # Credentials table
 ensure_table "credentials" \
-    "AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S AttributeName=credential_id,AttributeType=S" \
+    "AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S" \
     "AttributeName=pk,KeyType=HASH AttributeName=sk,KeyType=RANGE"
 ensure_gsi "credentials" "credential-id-index" "{AttributeName=credential_id,KeyType=HASH}"
 
 # Refresh tokens table
 ensure_table "refresh_tokens" \
-    "AttributeName=pk,AttributeType=S AttributeName=user_id,AttributeType=S" \
+    "AttributeName=pk,AttributeType=S" \
     "AttributeName=pk,KeyType=HASH"
 ensure_gsi "refresh_tokens" "user-index" "{AttributeName=user_id,KeyType=HASH}"
 
@@ -150,9 +150,30 @@ ensure_table "email_tokens" \
 
 # OAuth devices table (regional)
 ensure_table "oauth_devices" \
-    "AttributeName=pk,AttributeType=S AttributeName=user_code,AttributeType=S" \
+    "AttributeName=pk,AttributeType=S" \
     "AttributeName=pk,KeyType=HASH"
 ensure_gsi "oauth_devices" "user-code-index" "{AttributeName=user_code,KeyType=HASH}"
+
+# ── Enable TTL ────────────────────────────────────────────────────────────────
+
+echo
+echo "Enabling TTL on time-limited tables..."
+
+ensure_ttl() {
+    local table=$1
+    local attribute=$2
+
+    aws dynamodb update-time-to-live \
+        --table-name "$table" \
+        --time-to-live-specification "AttributeName=$attribute,Enabled=true" \
+        --endpoint-url "$ENDPOINT" --region "$REGION" --profile "$PROFILE" >/dev/null 2>&1
+    echo -e "${GREEN}✓ TTL enabled on '$table' (attribute: $attribute)${NC}"
+}
+
+ensure_ttl "challenges" "expires_at"
+ensure_ttl "email_tokens" "expires_at"
+ensure_ttl "oauth_devices" "expires_at"
+ensure_ttl "refresh_tokens" "expires_at"
 
 echo
 echo -e "${GREEN}✓ All tables ready!${NC}"

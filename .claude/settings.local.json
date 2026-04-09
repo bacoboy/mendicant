@@ -28,7 +28,22 @@
       "Bash(docker build:*)",
       "Bash(docker run:*)",
       "Bash(/dev/null ls:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(aws dynamodb list-tables:*)",
+      "Bash(aws dynamodb put-item:*)",
+      "Bash(aws dynamodb describe-time-to-live:*)",
+      "Bash(aws dynamodb update-time-to-live:*)",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\"}')",
+      "Bash(pkill -f \"docker compose logs\")",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test2@example.com\"}')",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test3@example.com\"}')",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test4@example.com\"}')",
+      "Bash(curl --insecure -s https://localhost:9001/)",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test5@example.com\"}')",
+      "Bash(docker image ls:*)",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test6@example.com\"}')",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email -H 'Content-Type: application/json' -d '{\"email\":\"test7@example.com\"}')",
+      "Bash(curl --insecure -s -X POST https://localhost:9001/auth/register/email*)"
     ]
   }
 }

@@ -18,7 +18,15 @@
 <body>
   <h1>Register your passkey</h1>
 
-  <div data-signals='{"token":"","displayName":"","registerOptions":null,"challengeId":"","registerError":""}'>
+  <script type="module">
+    // Extract token from URL BEFORE Datastar loads
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token') || '';
+    window.__registerToken = token;
+    console.log('[register-confirm] Token from URL:', token);
+  </script>
+
+  <div data-signals='{"displayName":"","registerOptions":null,"challengeId":"","registerError":""}'>
     <div class="info">
       Email verified! Now set your display name and register a passkey.
     </div>
@@ -36,14 +44,12 @@
       window.Datastar = ds;
       window.root = ds.root;
 
-      // Extract token from URL and set it
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get('token') || '';
-      if (window.root && token) {
-        window.root.token = token;
+      // Use the token extracted before Datastar loaded
+      if (window.__registerToken) {
+        window.root.token = window.__registerToken;
       }
 
-      console.log('[register-confirm] Datastar loaded, token:', token);
+      console.log('[register-confirm] Datastar loaded, token set:', window.root.token);
     }).catch(e => console.error('Failed to load Datastar:', e));
   </script>
   <script type="module" src="/static/passkey-plugin.js"></script>

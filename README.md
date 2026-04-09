@@ -5,57 +5,70 @@ Multi-region serverless auth platform on AWS. Passkey-only authentication, role-
 ## Prerequisites
 
 - Rust toolchain (`rustup`)
-- `cargo-lambda` — `cargo install cargo-lambda`
-- Docker (for local DynamoDB)
-- Terraform >= 1.9.0 (for deployment)
+- Docker (for DynamoDB Local, Lambda RIE, local-apigw, Caddy)
+- Terraform >= 1.9.0 (for deployment only)
+- AWS CLI with local profile configured (for DynamoDB setup)
 
 ## Local Development
 
-### 1. Start local dependencies
+The local stack simulates the production AWS architecture exactly:
+- **DynamoDB Local** (in-memory tables, regional-only)
+- **Lambda container** (AWS Runtime Interface Emulator)
+- **local-apigw proxy** (translates HTTP → API Gateway v2 events)
+- **Caddy** (HTTPS reverse proxy, required for Safari WebAuthn)
 
-```bash
-docker compose up -d   # DynamoDB Local on localhost:8000
-```
+Each HTTP request becomes one discrete Lambda invocation with REPORT lines in the logs.
 
-### 2. Create DynamoDB tables
-
-```bash
-bash scripts/setup-dynamodb-local.sh
-```
-
-This creates the 5 tables needed for local development and enables TTL attributes.
-
-### 3. Generate a local signing key
+### 1. Generate a local signing key
 
 ```bash
 openssl genrsa -out dev-key.pem 2048
 ```
 
-### 4. Set environment variables
+### 2. Start the full stack
 
 ```bash
-export DYNAMODB_ENDPOINT_URL=http://localhost:8000
-export JWT_SIGNING_KEY_PATH=$(pwd)/dev-key.pem
-export RP_ID=localhost
-export RP_ORIGIN=http://localhost:9000
-export BASE_URL=http://localhost:9000
-
-# Table names (must match the tables you create — see below or use Terraform)
-export TABLE_USERS=users
-export TABLE_CREDENTIALS=credentials
-export TABLE_REFRESH_TOKENS=refresh_tokens
-export TABLE_CHALLENGES=challenges
-export TABLE_OAUTH_DEVICES=oauth_devices
+docker compose up -d
 ```
 
-### 5. Run a lambda locally
+This builds the Lambda container and starts:
+- DynamoDB Local on `localhost:8000`
+- Lambda RIE on `localhost:8080` (internal, via local-apigw)
+- local-apigw proxy on `localhost:3000`
+- Caddy on `localhost:9000` (HTTP) and `localhost:9001` (HTTPS)
+
+### 3. Create DynamoDB tables
 
 ```bash
-cargo lambda watch -p auth-lambda    # auth/identity lambda on http://localhost:9000
-cargo lambda watch -p users-lambda  # user management lambda on http://localhost:9001
+bash scripts/setup-dynamodb-local.sh
 ```
 
-`cargo lambda watch` acts as a local HTTP server with hot reload.
+This creates the 6 tables for local development and enables TTL attributes.
+
+### 4. Access the application
+
+```bash
+open https://localhost:9001
+```
+
+Accept the browser cert warning on first use, or run:
+```bash
+docker compose exec caddy caddy trust
+```
+
+### 5. Viewing Lambda logs
+
+Each HTTP request produces a REPORT line showing invocation time:
+
+```bash
+docker compose logs -f auth-lambda
+```
+
+### 6. Rebuilding the Lambda after code changes
+
+```bash
+docker compose restart auth-lambda   # rebuilds the Docker image
+```
 
 ## Building
 
@@ -63,10 +76,34 @@ cargo lambda watch -p users-lambda  # user management lambda on http://localhost
 # Check everything compiles
 cargo build
 
-# Build a specific lambda for deployment
-cargo lambda build -p auth-lambda --release
-cargo lambda build -p users-lambda --release
+# Docker automatically rebuilds the Lambda image when you run:
+docker compose restart auth-lambda
 ```
+
+For deployment builds (see Deployment section), the Docker build process handles Lambda compilation.
+
+## Local Stack Architecture
+
+The Docker Compose setup locally emulates the production AWS architecture:
+
+```
+Browser (HTTPS)
+    ↓
+Caddy (localhost:9001)
+    ↓
+local-apigw proxy (localhost:3000)
+    ↓
+Lambda RIE (localhost:8080 — internal)
+    ↓
+DynamoDB Local (localhost:8000)
+```
+
+- **Caddy** provides HTTPS (required for Safari WebAuthn `navigator.credentials`)
+- **local-apigw** converts HTTP requests into API Gateway v2 format, invokes Lambda, returns the response
+- **Lambda RIE** runs the compiled auth-lambda binary
+- **DynamoDB Local** serves in-memory tables for regional/global table testing
+
+Each HTTP request becomes a single Lambda invocation with a REPORT line in the logs (just like AWS Lambda).
 
 ## Testing
 
@@ -138,6 +175,7 @@ The `regional` module is instantiated once per region using explicit provider al
 | `TABLE_CREDENTIALS` | DynamoDB credentials table name |
 | `TABLE_REFRESH_TOKENS` | DynamoDB refresh_tokens table name |
 | `TABLE_CHALLENGES` | DynamoDB challenges table name (regional) |
+| `TABLE_EMAIL_TOKENS` | DynamoDB email_tokens table name (regional) |
 | `TABLE_OAUTH_DEVICES` | DynamoDB oauth_devices table name (regional) |
 | `KMS_SIGNING_KEY_ID` | KMS key ID/ARN for JWT signing (production) |
 | `JWT_SIGNING_KEY_PATH` | Path to RSA PEM file (local dev only) |
@@ -149,8 +187,14 @@ In production, `KMS_SIGNING_KEY_ID` is used. In local dev, `JWT_SIGNING_KEY_PATH
 
 ## Auth Flows
 
-**Passkey registration/login:**
-`POST /auth/register/begin` → browser `navigator.credentials.create()` → `POST /auth/register/complete` → HttpOnly JWT cookie
+**Passkey registration (with email validation):**
+1. `POST /auth/register/start` (email) → email token sent via SES/local
+2. User confirms email via token → `/auth/register/email-confirmed`
+3. `POST /auth/register/begin` (passkey challenge) → browser `navigator.credentials.create()`
+4. `POST /auth/register/complete` (assertion) → HttpOnly JWT cookie
+
+**Passkey login:**
+`POST /auth/login/begin` → browser `navigator.credentials.get()` → `POST /auth/login/complete` → HttpOnly JWT cookie
 
 **OAuth device flow (CLI):**
 `POST /oauth/device` → display `user_code` → poll `POST /oauth/token` → user approves at `/activate` → CLI receives access + refresh tokens

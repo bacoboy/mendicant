@@ -478,14 +478,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Find token-based passkey registration button (exact match)
   const tokenRegisterBtn = document.querySelector('button[data-on-click="passkeyRegisterWithToken"]');
+  console.log('[passkey-plugin] Looking for token register button, found:', !!tokenRegisterBtn);
   if (tokenRegisterBtn) {
     tokenRegisterBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       const token = window.root?.token || window.Datastar?.root?.token;
-      console.log('[passkey-plugin] Token register clicked:', { token });
+      console.log('[passkey-plugin] Token register clicked:', { token, root: window.root });
       await doRegisterWithToken(null, token);
     });
     console.log('[passkey-plugin] Token register button listener attached');
+  } else {
+    console.log('[passkey-plugin] Token register button NOT found');
+    console.log('[passkey-plugin] Available buttons:', Array.from(document.querySelectorAll('button')).map(b => b.getAttribute('data-on-click')));
   }
 
   // Find register button (substring match for @passkeyRegister, but not passkeyRegisterWithToken)

@@ -26,6 +26,9 @@ services:
       TABLE_EMAIL_TOKENS: email_tokens
       TABLE_OAUTH_DEVICES: oauth_devices
       ENVIRONMENT: dev
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-2
     depends_on:
       - dynamodb-local
 
