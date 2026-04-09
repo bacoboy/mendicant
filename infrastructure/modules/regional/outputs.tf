@@ -8,6 +8,10 @@ output "kms_key_arn" {
   value       = local.kms_key_arn
 }
 
+output "email_tokens_table_name" {
+  value = aws_dynamodb_table.email_tokens.name
+}
+
 output "challenges_table_name" {
   value = aws_dynamodb_table.challenges.name
 }

@@ -3,6 +3,33 @@ locals {
   region = data.aws_region.current.id
 }
 
+# ── Email Tokens ─────────────────────────────────────────────────────────────
+# Regional only — not replicated. Email validation tokens are short-lived and
+# region-specific (registration always completes in the same region).
+# TTL: 15 minutes.
+
+resource "aws_dynamodb_table" "email_tokens" {
+  name         = "${local.prefix}-email-tokens"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  tags = {
+    app         = var.app_name
+    environment = var.environment
+    region      = local.region
+  }
+}
+
 # ── Challenges ───────────────────────────────────────────────────────────────
 # Regional only — not replicated. The auth begin/complete flow always runs in
 # the same region (latency-based routing), so cross-region access never occurs.

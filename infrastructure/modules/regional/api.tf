@@ -8,6 +8,7 @@ locals {
     users          = var.users_table_name
     credentials    = var.credentials_table_name
     refresh_tokens = var.refresh_tokens_table_name
+    email_tokens   = aws_dynamodb_table.email_tokens.name
     challenges     = aws_dynamodb_table.challenges.name
     oauth_devices  = aws_dynamodb_table.oauth_devices.name
   }
@@ -56,6 +57,8 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         "arn:aws:dynamodb:${local.region}:*:table/${var.credentials_table_name}/index/*",
         "arn:aws:dynamodb:${local.region}:*:table/${var.refresh_tokens_table_name}",
         "arn:aws:dynamodb:${local.region}:*:table/${var.refresh_tokens_table_name}/index/*",
+        aws_dynamodb_table.email_tokens.arn,
+        "${aws_dynamodb_table.email_tokens.arn}/index/*",
         aws_dynamodb_table.challenges.arn,
         "${aws_dynamodb_table.challenges.arn}/index/*",
         aws_dynamodb_table.oauth_devices.arn,
