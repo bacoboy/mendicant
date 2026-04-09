@@ -302,10 +302,13 @@ async fn enroll_complete(
 /// AAGUIDs from `ALLOWED_AAGUIDS` (comma-separated env var) or the built-in
 /// Yubico list are accepted.
 fn is_allowed_aaguid(aaguid: &uuid::Uuid) -> bool {
-    if !is_secure_context() {
+    let enforce = is_secure_context()
+        || std::env::var("REQUIRE_YUBIKEY").as_deref() == Ok("true");
+
+    if !enforce {
         tracing::warn!(
-            "AAGUID check skipped (dev environment). \
-             Authenticator AAGUID: {}. Add this to ALLOWED_AAGUIDS for production.",
+            "AAGUID check skipped (dev environment, REQUIRE_YUBIKEY not set). \
+             Authenticator AAGUID: {}. Set REQUIRE_YUBIKEY=true to enforce locally.",
             aaguid
         );
         return true;
