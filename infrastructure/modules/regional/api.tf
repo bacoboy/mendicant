@@ -196,19 +196,24 @@ resource "aws_apigatewayv2_api_mapping" "api" {
   stage       = aws_apigatewayv2_stage.default.name
 }
 
-# Route53 alias record pointing to the API Gateway custom domain
-# Created only in primary region to avoid duplicate record errors
+# Route53 alias records pointing to the API Gateway custom domain (A + AAAA for dual-stack)
+# Created in all regions with latency-based routing for geo-closest access
 resource "aws_route53_record" "api_domain" {
-  for_each = var.is_primary ? toset(["enabled"]) : toset([])
+  for_each = toset(["A", "AAAA"])
 
   name    = aws_apigatewayv2_domain_name.api.domain_name
-  type    = "A"
+  type    = each.key
   zone_id = var.route53_zone_id
+  set_identifier = "${local.region}-${each.key}"
 
   alias {
     name                   = aws_apigatewayv2_domain_name.api.domain_name_configuration[0].target_domain_name
     zone_id                = aws_apigatewayv2_domain_name.api.domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
+  }
+
+  latency_routing_policy {
+    region = local.region
   }
 }
 
