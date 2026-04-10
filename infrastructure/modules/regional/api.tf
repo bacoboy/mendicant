@@ -179,6 +179,7 @@ resource "aws_apigatewayv2_domain_name" "api" {
     certificate_arn = aws_acm_certificate.api.arn
     endpoint_type   = "REGIONAL"
     security_policy = "TLS_1_2"
+    ip_address_type = "dualstack"
   }
 
   depends_on = [aws_acm_certificate_validation.api]
