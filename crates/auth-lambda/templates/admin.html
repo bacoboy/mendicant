@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin – Mendicant</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 5vh auto; padding: 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 2rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #333; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    thead th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      background: #f5f5f5;
+      border-bottom: 2px solid #e0e0e0;
+      font-weight: 600;
+      color: #444;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid #eee;
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #fafafa; }
+    .table-name { font-family: monospace; font-size: 0.85rem; }
+    .table-link { color: #0070f3; text-decoration: none; }
+    .table-link:hover { text-decoration: underline; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+    .badge-global { background: #e8f4fd; color: #0070c0; }
+    .badge-regional { background: #f0f0f0; color: #555; }
+    .badge-active { background: #e6f4ea; color: #1e7e34; }
+    .badge-error { background: #fee; color: #c00; }
+    .num { font-variant-numeric: tabular-nums; }
+    .section { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .nav { margin-bottom: 2rem; font-size: 0.9rem; }
+    .nav a { color: #0070f3; text-decoration: none; }
+    .nav a:hover { text-decoration: underline; }
+    .note { font-size: 0.8rem; color: #888; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="nav"><a href="/me">← Profile</a></div>
+
+  <h1>Admin</h1>
+  <p class="subtitle">Administrator dashboard</p>
+
+  <div class="section">
+    <h2>DynamoDB Tables</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Scope</th>
+          <th>Status</th>
+          <th>Items (approx)</th>
+          <th>Size (approx)</th>
+          <th>Billing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tables %}
+        <tr>
+          <td class="table-name"><a href="/admin/tables/{{ t.slug }}" class="table-link">{{ t.name }}</a></td>
+          <td>
+            {% if t.scope == "Global" %}
+            <span class="badge badge-global">Global</span>
+            {% else %}
+            <span class="badge badge-regional">Regional</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.status == "ACTIVE" %}
+            <span class="badge badge-active">Active</span>
+            {% else if t.status == "error" %}
+            <span class="badge badge-error">Error</span>
+            {% else %}
+            <span class="badge">{{ t.status }}</span>
+            {% endif %}
+          </td>
+          <td class="num">{{ t.item_count }}</td>
+          <td class="num">{{ t.size }}</td>
+          <td>{{ t.billing_mode }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">Item counts and sizes are approximate, updated every ~6 hours by DynamoDB.</p>
+  </div>
+
+  <div class="nav" style="margin-top: 2rem;">
+    <form method="POST" action="/logout" style="display: inline;">
+      <button type="submit" style="background: none; border: none; color: #0070f3; cursor: pointer; font-size: 0.9rem; padding: 0;">Sign Out</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -89,8 +89,12 @@ docker compose logs -f auth-lambda
 ### 7. Rebuilding the Lambda after code changes
 
 ```bash
-docker compose restart auth-lambda   # rebuilds the Docker image
+docker compose up -d --build auth-lambda
 ```
+
+The `--build` flag rebuilds the Docker image before restarting. `restart` alone does not rebuild.
+
+Build context is fast thanks to `.dockerignore` (excludes the `target/` directory) and BuildKit cache mounts for the Cargo registry and build artifacts.
 
 ## Building
 
@@ -98,8 +102,8 @@ docker compose restart auth-lambda   # rebuilds the Docker image
 # Check everything compiles
 cargo build
 
-# Docker automatically rebuilds the Lambda image when you run:
-docker compose restart auth-lambda
+# Rebuild and restart the Lambda container after code changes:
+docker compose up -d --build auth-lambda
 ```
 
 For deployment builds (see Deployment section), the Docker build process handles Lambda compilation.
@@ -229,3 +233,6 @@ Run `cargo run -p bootstrap -- <email>` → copy the printed URL → open it in 
 
 **Token verification:**
 `GET /.well-known/jwks.json` — public JWK for RS256 verification. KMS Multi-Region keys mean tokens issued in any region are verifiable everywhere.
+
+**Admin dashboard:**
+`GET /admin` — table overview (item counts, size, billing mode). `GET /admin/tables/{slug}` — paginated contents with domain-aware columns. Both require `Administrator` role; non-admin requests return 403.

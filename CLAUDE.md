@@ -36,7 +36,7 @@ open https://localhost:9001   # accept the browser cert warning (or: docker comp
 
 **After code changes:**
 ```bash
-docker compose restart auth-lambda   # rebuilds the Lambda image
+docker compose up -d --build auth-lambda   # rebuilds the Lambda image and restarts
 ```
 
 **Viewing Lambda logs and REPORT output:**
@@ -96,9 +96,10 @@ JWT signing is abstracted behind a `Signer` trait with two implementations: `Kms
 | `credentials` | Global Table | `USER#<id>` | `CRED#<cred_id>` | — |
 | `refresh_tokens` | Global Table | `TOKEN#<jti>` | — | 30 days |
 | `challenges` | Regional | `CHALLENGE#<id>` | — | 5 min |
+| `email_tokens` | Regional | `EMAIL_TOKEN#<id>` | — | configurable |
 | `oauth_devices` | Regional | `DEVICE#<code>` | — | 15 min |
 
-`challenges` and `oauth_devices` are regional-only — the auth flow always starts and completes in the same region (latency-based routing), so replication provides no benefit.
+Regional tables (`challenges`, `email_tokens`, `oauth_devices`) are not replicated — the auth flow always starts and completes in the same region (latency-based routing), so replication provides no benefit.
 
 ### Terraform Layout
 
@@ -146,6 +147,12 @@ WebAuthn requires `navigator.credentials` browser API calls which cannot be expr
 2. Only then generate challenge and send to browser
 3. Browser shows authenticator prompt
 4. `register_complete`: Final server-side verification (email check redundant but safe)
+
+### Admin Dashboard
+
+`GET /admin` — Administrator-only landing page. Calls `describe_table` for all 6 tables and shows status, approximate item count, size, and billing mode.
+
+`GET /admin/tables/{slug}` — Paginated table browser (25 items/page, cursor-based). Slugs: `users`, `credentials`, `refresh-tokens`, `challenges`, `email-tokens`, `oauth-devices`. Each table renders domain-aware columns (e.g. AAGUIDs mapped to YubiKey product names, Unix timestamps formatted, blobs omitted). Both routes return 403 for non-Administrator sessions.
 
 ### Multi-Region Design Principles
 
