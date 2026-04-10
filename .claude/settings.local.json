@@ -50,7 +50,9 @@
       "Bash(aws dynamodb scan:*)",
       "Bash(AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws dynamodb scan:*)",
       "Bash(docker buildx:*)",
-      "Bash(docker version:*)"
+      "Bash(docker version:*)",
+      "Bash(terraform fmt:*)",
+      "Bash(terraform plan:*)"
     ]
   }
 }
