@@ -121,7 +121,7 @@ resource "aws_acm_certificate" "api" {
 resource "aws_route53_record" "acm_validation" {
   for_each = var.is_primary ? {
     for dvo in aws_acm_certificate.api.domain_validation_options :
-    dvo.domain => {
+    dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
