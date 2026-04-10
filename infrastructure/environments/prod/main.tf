@@ -16,11 +16,19 @@ terraform {
 provider "aws" {
   alias  = "us_east_2"
   region = "us-east-2"
+
+  assume_role {
+    role_arn = "arn:aws:iam::054297229654:role/Admin"
+  }
 }
 
 provider "aws" {
   alias  = "us_west_2"
   region = "us-west-2"
+
+  assume_role {
+    role_arn = "arn:aws:iam::054297229654:role/Admin"
+  }
 }
 
 # TODO: add more regional providers as needed (eu-west-1, ap-southeast-1, etc.)
@@ -57,6 +65,8 @@ module "regional_us_east_2" {
   users_table_name          = module.global.users_table_name
   credentials_table_name    = module.global.credentials_table_name
   refresh_tokens_table_name = module.global.refresh_tokens_table_name
+  domain_name               = module.global.domain_name
+  route53_zone_id           = module.global.route53_zone_id
 }
 
 module "regional_us_west_2" {
@@ -74,4 +84,6 @@ module "regional_us_west_2" {
   users_table_name          = module.global.users_table_name
   credentials_table_name    = module.global.credentials_table_name
   refresh_tokens_table_name = module.global.refresh_tokens_table_name
+  domain_name               = module.global.domain_name
+  route53_zone_id           = module.global.route53_zone_id
 }

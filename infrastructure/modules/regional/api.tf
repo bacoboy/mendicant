@@ -97,6 +97,53 @@ resource "aws_iam_role_policy" "lambda_kms" {
   policy = data.aws_iam_policy_document.lambda_kms.json
 }
 
+# ── ACM Certificate for HTTPS ────────────────────────────────────────────────
+
+resource "aws_acm_certificate" "api" {
+  domain_name       = "api.${var.domain_name}"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    app         = var.app_name
+    environment = var.environment
+    region      = local.region
+  }
+}
+
+# DNS validation records — only created in primary region
+# All regions share the same domain and DNS validation will apply to all regional certs
+# Terraform cannot create duplicate Route53 records across regions, so we skip in replicas
+
+resource "aws_route53_record" "acm_validation" {
+  for_each = var.is_primary ? {
+    for dvo in aws_acm_certificate.api.domain_validation_options :
+    dvo.domain => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = var.route53_zone_id
+}
+
+resource "aws_acm_certificate_validation" "api" {
+  certificate_arn = aws_acm_certificate.api.arn
+  timeouts {
+    create = "5m"
+  }
+  depends_on = [aws_route53_record.acm_validation]
+}
+
 # ── HTTP API Gateway ──────────────────────────────────────────────────────────
 
 resource "aws_apigatewayv2_api" "main" {
@@ -121,6 +168,27 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.main.id
   name        = "$default"
   auto_deploy = true
+}
+
+# ── Custom Domain Name (HTTPS) ────────────────────────────────────────────────
+
+resource "aws_apigatewayv2_domain_name" "api" {
+  domain_name              = "api.${var.domain_name}"
+  domain_name_certificate_arn = aws_acm_certificate.api.arn
+
+  depends_on = [aws_acm_certificate_validation.api]
+
+  tags = {
+    app         = var.app_name
+    environment = var.environment
+    region      = local.region
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "api" {
+  api_id      = aws_apigatewayv2_api.main.id
+  domain_name = aws_apigatewayv2_domain_name.api.domain_name
+  stage       = aws_apigatewayv2_stage.default.name
 }
 
 # ── auth-lambda ───────────────────────────────────────────────────────────────

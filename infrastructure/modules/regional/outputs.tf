@@ -19,3 +19,13 @@ output "challenges_table_name" {
 output "oauth_devices_table_name" {
   value = aws_dynamodb_table.oauth_devices.name
 }
+
+output "acm_certificate_arn" {
+  description = "ARN of the regional ACM certificate for api.mendicant.io"
+  value       = aws_acm_certificate.api.arn
+}
+
+output "api_domain_name" {
+  description = "HTTPS domain name for this regional API (api.mendicant.io)"
+  value       = aws_apigatewayv2_domain_name.api.domain_name
+}

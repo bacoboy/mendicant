@@ -28,3 +28,13 @@ variable "credentials_table_name" {
 variable "refresh_tokens_table_name" {
   type = string
 }
+
+variable "domain_name" {
+  description = "Root domain name (from global module)"
+  type        = string
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for mendicant.io (from global module)"
+  type        = string
+}

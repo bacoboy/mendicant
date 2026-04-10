@@ -30,3 +30,13 @@ output "kms_signing_key_arn" {
 output "kms_signing_key_id" {
   value = aws_kms_key.jwt_signing.key_id
 }
+
+output "route53_zone_id" {
+  description = "Route53 hosted zone ID for mendicant.io"
+  value       = data.aws_route53_zone.main.zone_id
+}
+
+output "domain_name" {
+  description = "Root domain name"
+  value       = var.domain_name
+}
