@@ -588,5 +588,26 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('[passkey-plugin] Admin enroll button listener attached');
   }
 
+  // Set up expand/collapse for admin table details
+  const expandCells = document.querySelectorAll('td.expand-col[data-on-click]');
+  if (expandCells.length > 0) {
+    expandCells.forEach((cell) => {
+      cell.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Extract UUID from the data-on-click attribute
+        // Pattern: $exp = $exp === '{{ detail.uuid }}' ? '' : '{{ detail.uuid }}'
+        const match = cell.getAttribute('data-on-click').match(/'([^']+)'/);
+        if (match) {
+          const uuid = match[1];
+          const currentExp = window.root?.exp || '';
+          setSignal('exp', currentExp === uuid ? '' : uuid);
+          console.log('[passkey-plugin] Detail toggled:', { uuid, newExp: currentExp === uuid ? '' : uuid });
+        }
+      });
+    });
+    console.log(`[passkey-plugin] ${expandCells.length} expand cell(s) set up`);
+  }
+
   console.log('[passkey-plugin] Event listeners set up successfully');
 });

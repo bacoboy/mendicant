@@ -155,14 +155,25 @@ struct TableBrowseQuery {
     cursor: Option<String>,
 }
 
+struct UserDetail {
+    uuid: String,
+    credential_rows: Vec<Vec<String>>,
+}
+
+struct TableRow {
+    cells: Vec<String>,
+    detail: Option<UserDetail>,
+}
+
 #[derive(Template)]
 #[template(path = "admin-table.html")]
 struct AdminTableTemplate {
     table_name: String,
     table_slug: String,
     scope: &'static str,
+    has_details: bool,
     headers: Vec<&'static str>,
-    rows: Vec<Vec<String>>,
+    rows: Vec<TableRow>,
     next_cursor: Option<String>,
     item_count: usize,
 }
@@ -181,7 +192,7 @@ async fn table_page(
         "users" => (
             &state.db.users_table,
             "Global",
-            vec!["Email", "Display Name", "Role", "Status", "Created"],
+            vec!["UUID", "Email", "Display Name", "Role", "Status", "Created"],
         ),
         "credentials" => (
             &state.db.credentials_table,
@@ -231,8 +242,9 @@ async fn table_page(
     let items = resp.items.unwrap_or_default();
     let item_count = items.len();
 
-    let rows: Vec<Vec<String>> = items.iter().map(|item| {
-        match slug.as_str() {
+    let mut rows: Vec<TableRow> = Vec::with_capacity(items.len());
+    for item in &items {
+        let cells = match slug.as_str() {
             "users" => row_user(item),
             "credentials" => row_credential(item),
             "refresh-tokens" => row_refresh_token(item),
@@ -240,13 +252,40 @@ async fn table_page(
             "email-tokens" => row_email_token(item),
             "oauth-devices" => row_oauth_device(item),
             _ => vec![],
-        }
-    }).collect();
+        };
+
+        let detail = if slug.as_str() == "users" {
+            let uuid = val_s(item, "user_id");
+            let creds_resp = state.db.inner
+                .query()
+                .table_name(&state.db.credentials_table)
+                .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
+                .expression_attribute_values(":pk", AttributeValue::S(format!("USER#{uuid}")))
+                .expression_attribute_values(":prefix", AttributeValue::S("CRED#".into()))
+                .send()
+                .await
+                .ok()
+                .and_then(|r| r.items)
+                .unwrap_or_default();
+            let credential_rows: Vec<Vec<String>> = creds_resp
+                .iter()
+                .map(|c| row_credential_detail(c))
+                .collect();
+            Some(UserDetail { uuid, credential_rows })
+        } else {
+            None
+        };
+
+        rows.push(TableRow { cells, detail });
+    }
+
+    let has_details = slug.as_str() == "users";
 
     Ok(Html(AdminTableTemplate {
         table_name: ddb_table.to_string(),
         table_slug: slug,
         scope,
+        has_details,
         headers,
         rows,
         next_cursor,
@@ -336,7 +375,9 @@ fn aaguid_display(aaguid: &str) -> String {
 }
 
 fn row_user(item: &DdbItem) -> Vec<String> {
+    let user_id = val_s(item, "user_id");
     vec![
+        user_id,
         val_s(item, "email"),
         val_s(item, "display_name"),
         title_case(&val_s(item, "role")),
@@ -350,6 +391,16 @@ fn row_credential(item: &DdbItem) -> Vec<String> {
     let aaguid = val_s(item, "aaguid");
     vec![
         trunc(&user_id, 8),
+        val_s(item, "nickname"),
+        aaguid_display(&aaguid),
+        val_n(item, "sign_count"),
+        trunc(&val_s(item, "last_used_at"), 19),
+    ]
+}
+
+fn row_credential_detail(item: &DdbItem) -> Vec<String> {
+    let aaguid = val_s(item, "aaguid");
+    vec![
         val_s(item, "nickname"),
         aaguid_display(&aaguid),
         val_n(item, "sign_count"),

@@ -32,6 +32,15 @@
     }
     tbody tr:last-child td { border-bottom: none; }
     tbody tr:hover td { background: #fafafa; }
+    td[data-on-click] { cursor: pointer; user-select: none; }
+    td[data-on-click]:hover { background: #f0f0f0 !important; }
+    .expand-col { width: 2rem; text-align: center; }
+    .detail-row td { padding: 0; background: #f8f8f8; vertical-align: top; }
+    .detail-table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
+    .detail-table thead th { padding: 0.4rem 1rem; color: #666; font-weight: 600; text-align: left; background: #f8f8f8; border-bottom: 1px solid #ddd; }
+    .detail-table tbody td { padding: 0.35rem 0.75rem; font-family: monospace; border-top: 1px solid #eee; }
+    .detail-table tbody tr:hover td { background: #f0f0f0; }
+    .empty-detail { padding: 0.75rem 1rem; color: #999; font-size: 0.8rem; }
     .empty { color: #999; text-align: center; padding: 2rem; font-family: system-ui; }
     .pagination { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; font-size: 0.875rem; }
     .pagination a {
@@ -59,6 +68,12 @@
     .nav a { color: #0070f3; text-decoration: none; }
     .nav a:hover { text-decoration: underline; }
   </style>
+  {% if has_details %}
+  <script type="module">
+    import('/static/datastar.js').then(ds => { window.Datastar = ds; window.root = ds.root; });
+  </script>
+  <script type="module" src="/static/passkey-plugin.js"></script>
+  {% endif %}
 </head>
 <body>
   <div class="nav">
@@ -78,24 +93,66 @@
     {% if rows.is_empty() %}
     <p class="empty">No items found.</p>
     {% else %}
-    <table>
-      <thead>
-        <tr>
-          {% for h in headers %}
-          <th>{{ h }}</th>
+    <div {% if has_details %}data-signals='{"exp":""}'{% endif %}>
+      <table>
+        <thead>
+          <tr>
+            {% if has_details %}<th class="expand-col"></th>{% endif %}
+            {% for h in headers %}
+            <th>{{ h }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            {% match row.detail %}
+            {% when Some(detail) %}
+            <td class="expand-col"
+                data-on-click="$exp = $exp === '{{ detail.uuid }}' ? '' : '{{ detail.uuid }}'">
+              <span data-text="$exp === '{{ detail.uuid }}' ? '▼' : '▶'">▶</span>
+            </td>
+            {% when None %}
+            {% endmatch %}
+            {% for cell in row.cells %}
+            <td title="{{ cell }}">{{ cell }}</td>
+            {% endfor %}
+          </tr>
+          {% match row.detail %}
+          {% when Some(detail) %}
+          <tr class="detail-row" style="display:none" data-show="$exp === '{{ detail.uuid }}'">
+            <td colspan="{{ headers.len() + 1 }}">
+              {% if detail.credential_rows.is_empty() %}
+              <p class="empty-detail">No credentials.</p>
+              {% else %}
+              <table class="detail-table">
+                <thead>
+                  <tr>
+                    <th>Nickname</th>
+                    <th>Key Type</th>
+                    <th>Sign Count</th>
+                    <th>Last Used</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for cred in detail.credential_rows %}
+                  <tr>
+                    {% for cell in cred %}
+                    <td>{{ cell }}</td>
+                    {% endfor %}
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% endif %}
+            </td>
+          </tr>
+          {% when None %}
+          {% endmatch %}
           {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        <tr>
-          {% for cell in row %}
-          <td title="{{ cell }}">{{ cell }}</td>
-          {% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    </div>
 
     <div class="pagination">
       <span class="count">Showing {{ item_count }} item{% if item_count != 1 %}s{% endif %}</span>

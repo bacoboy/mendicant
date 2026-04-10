@@ -50,6 +50,8 @@ This creates the 6 tables for local development and enables TTL attributes.
 The admin account is created out-of-band — not via the public registration flow. Run the bootstrap tool once after the tables are set up:
 
 ```bash
+AWS_ACCESS_KEY_ID=test \
+AWS_SECRET_ACCESS_KEY=test \
 DYNAMODB_ENDPOINT_URL=http://localhost:8000 \
 TABLE_USERS=users \
 TABLE_CREDENTIALS=credentials \
@@ -60,6 +62,8 @@ TABLE_OAUTH_DEVICES=oauth_devices \
 SITE_URL=https://localhost:9001 \
 cargo run -p bootstrap -- admin@example.com --display-name "Admin"
 ```
+
+(The dummy AWS credentials are only needed for local DynamoDB; they don't need to be real.)
 
 The tool prints a single-use enrollment URL valid for 60 minutes (pass `--ttl-minutes N` to change). Open that URL in the browser with your YubiKey attached, then click **Register YubiKey**. In local dev the AAGUID check is skipped so any authenticator works; in production only hardware YubiKeys are accepted.
 
