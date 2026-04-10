@@ -1,6 +1,14 @@
+data "aws_availability_zones" "this" {
+  state = "available"
+}
+
 locals {
-  prefix = "${var.app_name}-${var.environment}"
-  region = data.aws_region.current.id
+  prefix       = "${var.app_name}-${var.environment}"
+  region       = data.aws_region.current.id
+  short_region = one(toset([
+    for az_id in data.aws_availability_zones.this.zone_ids :
+    split("-", az_id)[0]
+  ]))
 }
 
 # ── Email Tokens ─────────────────────────────────────────────────────────────

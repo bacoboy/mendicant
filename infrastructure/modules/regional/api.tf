@@ -16,29 +16,32 @@ locals {
   # Common environment variables shared by both Lambda functions.
   # Reference as: environment { variables = local.lambda_env }
   lambda_env = {
-    TABLE_USERS           = local.table_names.users
-    TABLE_CREDENTIALS     = local.table_names.credentials
-    TABLE_REFRESH_TOKENS  = local.table_names.refresh_tokens
-    TABLE_CHALLENGES      = local.table_names.challenges
-    TABLE_EMAIL_TOKENS    = local.table_names.email_tokens
-    TABLE_OAUTH_DEVICES   = local.table_names.oauth_devices
+    TABLE_USERS                = local.table_names.users
+    TABLE_CREDENTIALS          = local.table_names.credentials
+    TABLE_REFRESH_TOKENS       = local.table_names.refresh_tokens
+    TABLE_CHALLENGES           = local.table_names.challenges
+    TABLE_EMAIL_TOKENS         = local.table_names.email_tokens
+    TABLE_OAUTH_DEVICES        = local.table_names.oauth_devices
     AWS_USE_DUALSTACK_ENDPOINT = "true"
   }
 }
 
 # ── IAM execution role (shared by both Lambdas) ───────────────────────────────
 
-resource "aws_iam_role" "lambda_exec" {
-  name = "${local.prefix}-lambda-exec"
+data "aws_iam_policy_document" "lambda_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
+resource "aws_iam_role" "lambda_exec" {
+  name               = "${local.prefix}-lambda-exec-${local.short_region}"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
@@ -46,52 +49,52 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy" "lambda_dynamodb" {
-  name = "dynamodb-access"
-  role = aws_iam_role.lambda_exec.id
+data "aws_iam_policy_document" "lambda_dynamodb" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query",
+      "dynamodb:Scan",
+    ]
+    resources = [
+      "arn:aws:dynamodb:${local.region}:*:table/${var.users_table_name}",
+      "arn:aws:dynamodb:${local.region}:*:table/${var.users_table_name}/index/*",
+      "arn:aws:dynamodb:${local.region}:*:table/${var.credentials_table_name}",
+      "arn:aws:dynamodb:${local.region}:*:table/${var.credentials_table_name}/index/*",
+      "arn:aws:dynamodb:${local.region}:*:table/${var.refresh_tokens_table_name}",
+      "arn:aws:dynamodb:${local.region}:*:table/${var.refresh_tokens_table_name}/index/*",
+      aws_dynamodb_table.email_tokens.arn,
+      "${aws_dynamodb_table.email_tokens.arn}/index/*",
+      aws_dynamodb_table.challenges.arn,
+      "${aws_dynamodb_table.challenges.arn}/index/*",
+      aws_dynamodb_table.oauth_devices.arn,
+      "${aws_dynamodb_table.oauth_devices.arn}/index/*",
+    ]
+  }
+}
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "dynamodb:GetItem",
-        "dynamodb:PutItem",
-        "dynamodb:UpdateItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:Query",
-        "dynamodb:Scan",
-      ]
-      Resource = [
-        "arn:aws:dynamodb:${local.region}:*:table/${var.users_table_name}",
-        "arn:aws:dynamodb:${local.region}:*:table/${var.users_table_name}/index/*",
-        "arn:aws:dynamodb:${local.region}:*:table/${var.credentials_table_name}",
-        "arn:aws:dynamodb:${local.region}:*:table/${var.credentials_table_name}/index/*",
-        "arn:aws:dynamodb:${local.region}:*:table/${var.refresh_tokens_table_name}",
-        "arn:aws:dynamodb:${local.region}:*:table/${var.refresh_tokens_table_name}/index/*",
-        aws_dynamodb_table.email_tokens.arn,
-        "${aws_dynamodb_table.email_tokens.arn}/index/*",
-        aws_dynamodb_table.challenges.arn,
-        "${aws_dynamodb_table.challenges.arn}/index/*",
-        aws_dynamodb_table.oauth_devices.arn,
-        "${aws_dynamodb_table.oauth_devices.arn}/index/*",
-      ]
-    }]
-  })
+resource "aws_iam_role_policy" "lambda_dynamodb" {
+  name   = "dynamodb-access"
+  role   = aws_iam_role.lambda_exec.id
+  policy = data.aws_iam_policy_document.lambda_dynamodb.json
+}
+
+data "aws_iam_policy_document" "lambda_kms" {
+  statement {
+    effect    = "Allow"
+    actions   = ["kms:Sign", "kms:GetPublicKey"]
+    resources = [local.kms_key_arn]
+  }
 }
 
 resource "aws_iam_role_policy" "lambda_kms" {
-  name = "kms-signing"
-  role = aws_iam_role.lambda_exec.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["kms:Sign", "kms:GetPublicKey"]
-      Resource = local.kms_key_arn
-    }]
-  })
+  name   = "kms-signing"
+  role   = aws_iam_role.lambda_exec.id
+  policy = data.aws_iam_policy_document.lambda_kms.json
 }
 
 # ── HTTP API Gateway ──────────────────────────────────────────────────────────
