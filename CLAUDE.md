@@ -17,7 +17,7 @@ Mendicant is a multi-region serverless platform built on AWS. This repository co
 - **Database:** DynamoDB (pay-per-request), Global Tables for persistent data, regional tables for short-lived data
 - **IaC:** Terraform `>= 1.9.0`, AWS provider `~> 6.0`
 - **Frontend:** Datastar (hypermedia/SSE-driven, no custom JS), Askama for server-side HTML templates
-- **JWT signing:** AWS KMS Multi-Region Keys (RS256) in production; local RSA key file in dev
+- **JWT signing:** AWS KMS Multi-Region Keys (RS256) in production; local RSA key file in dev (mounted as a Docker volume — never baked into the image, never committed to git)
 
 ## Local Development (no AWS required)
 
@@ -103,20 +103,30 @@ Regional tables (`challenges`, `email_tokens`, `oauth_devices`) are not replicat
 
 ### Terraform Layout
 
+Two separate Terraform projects with different change cadence:
+
 ```
 infrastructure/
-  modules/
-    global/     # DynamoDB global tables, CloudFront, Route53, KMS primary key
-    regional/   # Lambda, HTTP API Gateway, S3, KMS replica — deployed per region
-  environments/
-    dev/
-    prod/
+  infra/                  # Foundation — apply rarely (DNS, API GW, ECR, DynamoDB, KMS, IAM)
+    main.tf               # Providers + global resources inlined (KMS, global DynamoDB, Route53)
+    outputs.tf
+    modules/
+      regional/           # Per-region infra (API GW, ECR, DynamoDB regional tables, IAM role, KMS replica)
+  app/                    # Deployment — apply on every code release
+    main.tf               # Providers + module calls
+    variables.tf          # image_tag (ECR sha- tag printed by CI after each build)
+    modules/
+      regional-app/       # Lambda functions + API Gateway integrations and routes
 ```
 
 - `us-east-2` is the designated global region
+- No `environments/` indirection — prod only, values are hardcoded in `main.tf`
 - Regional module is instantiated once per region using explicit provider aliases (no `for_each` across providers)
-- Use `for_each` over maps/sets for any repeated resources within a module — never `count`
-- Group resources by concern in `.tf` files, not by resource type (e.g. a Lambda + its IAM role + its API Gateway integration live in the same file)
+- Always use `for_each` over sets/maps for repeated resources — never `count`
+- Group resources by concern in `.tf` files, not by resource type
+- App layer reads foundation resources via `data` sources (by name convention) and `aws_caller_identity` — no SSM, no remote state needed
+- Deploy infra: `cd infrastructure/infra && terraform apply`
+- Deploy app: `cd infrastructure/app && terraform apply -var="image_tag=sha-<sha>"`
 
 ### Auth Flows
 

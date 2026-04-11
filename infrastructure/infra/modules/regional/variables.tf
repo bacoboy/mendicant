@@ -7,13 +7,13 @@ variable "environment" {
 }
 
 variable "is_primary" {
-  description = "True for the global/primary region (us-east-2). Controls which resources are primary vs replica."
+  description = "True for us-east-2. Controls whether a KMS replica is created (primary already has the key)."
   type        = bool
   default     = false
 }
 
 variable "kms_signing_key_arn" {
-  description = "ARN of the primary KMS multi-region key from the global module."
+  description = "ARN of the primary KMS multi-region key."
   type        = string
 }
 
@@ -30,11 +30,9 @@ variable "refresh_tokens_table_name" {
 }
 
 variable "domain_name" {
-  description = "Root domain name (from global module)"
-  type        = string
+  type = string
 }
 
 variable "route53_zone_id" {
-  description = "Route53 hosted zone ID for mendicant.io (from global module)"
-  type        = string
+  type = string
 }

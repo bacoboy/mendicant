@@ -179,24 +179,32 @@ crates/
   bootstrap/    # CLI tool: create first admin user + emit YubiKey enrollment URL.
 
 infrastructure/
-  modules/
-    global/     # DynamoDB Global Tables, CloudFront, Route53, KMS primary key
-    regional/   # Lambda, API Gateway, S3, KMS replica — deployed per region
-  environments/
-    dev/
-    prod/
+  infra/                  # Foundation — DNS, API GW, ECR, DynamoDB, KMS, IAM
+    main.tf               # Global resources inlined; calls regional module per region
+    modules/regional/     # Per-region infra resources
+  app/                    # Deployment — Lambda functions + API GW routes
+    main.tf               # Calls regional-app module per region
+    variables.tf          # image_tag variable
+    modules/regional-app/ # Lambda + integrations + routes
 ```
 
 ## Deployment
 
+Two separate Terraform projects with different change cadence:
+
 ```bash
-cd infrastructure/environments/dev
+# Foundation (DNS, API GW, ECR, DynamoDB, KMS, IAM) — apply rarely
+cd infrastructure/infra
 terraform init
-terraform plan
 terraform apply
+
+# App (Lambda functions + routes) — apply on every release
+cd infrastructure/app
+terraform init
+terraform apply -var="image_tag=sha-<sha>"
 ```
 
-The `regional` module is instantiated once per region using explicit provider aliases. `us-east-2` is the designated global region.
+The image tag is printed by the CI build workflow after each successful push to `main`. `us-east-2` is the designated global region; `us-west-2` is a replica.
 
 ## Environment Variables (Lambda)
 
@@ -208,8 +216,8 @@ The `regional` module is instantiated once per region using explicit provider al
 | `TABLE_CHALLENGES` | DynamoDB challenges table name (regional) |
 | `TABLE_EMAIL_TOKENS` | DynamoDB email_tokens table name (regional) |
 | `TABLE_OAUTH_DEVICES` | DynamoDB oauth_devices table name (regional) |
-| `KMS_SIGNING_KEY_ID` | KMS key ID/ARN for JWT signing (production) |
-| `JWT_SIGNING_KEY_PATH` | Path to RSA PEM file (local dev only) |
+| `KMS_KEY_ARN` | KMS key ARN for JWT signing (production only) |
+| `JWT_SIGNING_KEY_PATH` | Path to RSA PEM file (local dev only — mounted as Docker volume, never baked into image) |
 | `RP_ID` | WebAuthn Relying Party ID (e.g. `example.com`) |
 | `RP_ORIGIN` | WebAuthn origin (e.g. `https://example.com`) |
 | `BASE_URL` | Public base URL for activation links |

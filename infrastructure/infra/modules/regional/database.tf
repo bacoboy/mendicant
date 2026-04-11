@@ -11,10 +11,9 @@ locals {
   ]))
 }
 
-# ── Email Tokens ─────────────────────────────────────────────────────────────
+# ── Email Tokens ──────────────────────────────────────────────────────────────
 # Regional only — not replicated. Email validation tokens are short-lived and
-# region-specific (registration always completes in the same region).
-# TTL: 15 minutes.
+# always consumed in the same region they were created in (latency routing).
 
 resource "aws_dynamodb_table" "email_tokens" {
   name         = "${local.prefix}-email-tokens"
@@ -26,10 +25,7 @@ resource "aws_dynamodb_table" "email_tokens" {
     enabled        = true
   }
 
-  attribute {
-    name = "pk"
-    type = "S"
-  }
+  attribute { name = "pk"; type = "S" }
 
   tags = {
     app         = var.app_name
@@ -38,10 +34,8 @@ resource "aws_dynamodb_table" "email_tokens" {
   }
 }
 
-# ── Challenges ───────────────────────────────────────────────────────────────
-# Regional only — not replicated. The auth begin/complete flow always runs in
-# the same region (latency-based routing), so cross-region access never occurs.
-# TTL: 5 minutes.
+# ── Challenges ────────────────────────────────────────────────────────────────
+# Regional only. WebAuthn begin/complete always runs in the same region.
 
 resource "aws_dynamodb_table" "challenges" {
   name         = "${local.prefix}-challenges"
@@ -53,10 +47,7 @@ resource "aws_dynamodb_table" "challenges" {
     enabled        = true
   }
 
-  attribute {
-    name = "pk"
-    type = "S"
-  }
+  attribute { name = "pk"; type = "S" }
 
   tags = {
     app         = var.app_name
@@ -66,10 +57,8 @@ resource "aws_dynamodb_table" "challenges" {
 }
 
 # ── OAuth Device Grants ───────────────────────────────────────────────────────
-# Regional only — not replicated. Device flow activation always completes in
-# the same region the CLI request originated from.
-# TTL: 15 minutes.
-# GSI: user-code-index — browser activation page looks up grant by user_code.
+# Regional only. Device flow activation always completes in the same region.
+# GSI: user-code-index — lets the browser activation page look up by user_code.
 
 resource "aws_dynamodb_table" "oauth_devices" {
   name         = "${local.prefix}-oauth-devices"
@@ -81,15 +70,8 @@ resource "aws_dynamodb_table" "oauth_devices" {
     enabled        = true
   }
 
-  attribute {
-    name = "pk"
-    type = "S"
-  }
-
-  attribute {
-    name = "user_code"
-    type = "S"
-  }
+  attribute { name = "pk"; type = "S" }
+  attribute { name = "user_code"; type = "S" }
 
   global_secondary_index {
     name            = "user-code-index"

@@ -11,7 +11,7 @@ services:
   auth-lambda:
     build:
       context: .
-      dockerfile: Dockerfile.auth-lambda
+      dockerfile: crates/auth-lambda/Dockerfile
     volumes:
       - ./dev-key.pem:/var/task/dev-key.pem
     environment:

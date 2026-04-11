@@ -1,0 +1,117 @@
+name: Build and push
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_ACCOUNT_ID: "054297229654"
+
+jobs:
+  # ── Build ──────────────────────────────────────────────────────────────────
+  # Compile both Lambda binaries and build ARM64 Docker images.
+  # Images are saved as tarballs and uploaded as artifacts for the push jobs.
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build auth-lambda
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: crates/auth-lambda/Dockerfile
+          platforms: linux/arm64
+          tags: auth-lambda:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/auth-lambda.tar
+          cache-from: type=gha,scope=auth-lambda
+          cache-to: type=gha,scope=auth-lambda,mode=max
+
+      - name: Build users-lambda
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: crates/users-lambda/Dockerfile
+          platforms: linux/arm64
+          tags: users-lambda:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/users-lambda.tar
+          cache-from: type=gha,scope=users-lambda
+          cache-to: type=gha,scope=users-lambda,mode=max
+
+      - name: Upload image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-images-${{ github.sha }}
+          path: /tmp/*.tar
+          retention-days: 1
+
+  # ── Push ───────────────────────────────────────────────────────────────────
+  # Load the built images and push to ECR in each region in parallel.
+  # Each job authenticates independently via OIDC — no shared credentials.
+  push:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: [us-east-2, us-west-2]
+      fail-fast: false  # report failures in all regions, not just the first
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download image artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-images-${{ github.sha }}
+          path: /tmp
+
+      - name: Load images into Docker
+        run: |
+          docker load --input /tmp/auth-lambda.tar
+          docker load --input /tmp/users-lambda.tar
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push auth-lambda
+        env:
+          REPO: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ matrix.region }}.amazonaws.com/mendicant-prod-auth-lambda
+        run: |
+          docker tag auth-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
+          docker push $REPO:sha-${{ github.sha }}
+
+      - name: Push users-lambda
+        env:
+          REPO: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ matrix.region }}.amazonaws.com/mendicant-prod-users-lambda
+        run: |
+          docker tag users-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
+          docker push $REPO:sha-${{ github.sha }}
+
+  # ── Summary ────────────────────────────────────────────────────────────────
+  # Print the image tag to deploy. Copy this SHA when running terraform apply.
+  summary:
+    needs: push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print deploy tag
+        run: |
+          echo "### Images pushed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: \`sha-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deploy with:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "terraform apply -var=\"image_tag=sha-${{ github.sha }}\"" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
