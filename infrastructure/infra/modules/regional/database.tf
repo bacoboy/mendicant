@@ -25,7 +25,10 @@ resource "aws_dynamodb_table" "email_tokens" {
     enabled        = true
   }
 
-  attribute { name = "pk"; type = "S" }
+  attribute {
+    name = "pk"
+    type = "S"
+  }
 
   tags = {
     app         = var.app_name
@@ -47,7 +50,10 @@ resource "aws_dynamodb_table" "challenges" {
     enabled        = true
   }
 
-  attribute { name = "pk"; type = "S" }
+  attribute {
+    name = "pk"
+    type = "S"
+  }
 
   tags = {
     app         = var.app_name
@@ -70,8 +76,15 @@ resource "aws_dynamodb_table" "oauth_devices" {
     enabled        = true
   }
 
-  attribute { name = "pk"; type = "S" }
-  attribute { name = "user_code"; type = "S" }
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "user_code"
+    type = "S"
+  }
 
   global_secondary_index {
     name            = "user-code-index"

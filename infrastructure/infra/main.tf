@@ -23,19 +23,11 @@ locals {
 provider "aws" {
   alias  = "us_east_2"
   region = "us-east-2"
-
-  assume_role {
-    role_arn = "arn:aws:iam::054297229654:role/Admin"
-  }
 }
 
 provider "aws" {
   alias  = "us_west_2"
   region = "us-west-2"
-
-  assume_role {
-    role_arn = "arn:aws:iam::054297229654:role/Admin"
-  }
 }
 
 # ── Route53 ───────────────────────────────────────────────────────────────────
@@ -87,9 +79,20 @@ resource "aws_dynamodb_table" "users" {
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
-  attribute { name = "pk"; type = "S" }
-  attribute { name = "sk"; type = "S" }
-  attribute { name = "email"; type = "S" }
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "email"
+    type = "S"
+  }
 
   global_secondary_index {
     name            = "email-index"
@@ -116,9 +119,20 @@ resource "aws_dynamodb_table" "credentials" {
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
-  attribute { name = "pk"; type = "S" }
-  attribute { name = "sk"; type = "S" }
-  attribute { name = "credential_id"; type = "S" }
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "credential_id"
+    type = "S"
+  }
 
   global_secondary_index {
     name            = "credential-id-index"
@@ -149,8 +163,15 @@ resource "aws_dynamodb_table" "refresh_tokens" {
     enabled        = true
   }
 
-  attribute { name = "pk"; type = "S" }
-  attribute { name = "user_id"; type = "S" }
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
 
   global_secondary_index {
     name            = "user-index"

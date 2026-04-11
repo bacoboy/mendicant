@@ -22,19 +22,11 @@ locals {
 provider "aws" {
   alias  = "us_east_2"
   region = "us-east-2"
-
-  assume_role {
-    role_arn = "arn:aws:iam::054297229654:role/Admin"
-  }
 }
 
 provider "aws" {
   alias  = "us_west_2"
   region = "us-west-2"
-
-  assume_role {
-    role_arn = "arn:aws:iam::054297229654:role/Admin"
-  }
 }
 
 # ── Regional deployments ───────────────────────────────────────────────────────
