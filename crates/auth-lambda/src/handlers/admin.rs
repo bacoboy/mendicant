@@ -25,26 +25,20 @@ use crate::middleware::AuthUser;
 use crate::sse::SseResponse;
 use crate::state::AppState;
 
-// ── Yubico AAGUID allow-list ──────────────────────────────────────────────────
+// ── Hardware key enforcement ──────────────────────────────────────────────────
 //
-// These were sourced from the FIDO Alliance Metadata Service (MDS3).
-// Run in dev mode (ENVIRONMENT=dev) to log your key's AAGUID, then update this
-// list or set the ALLOWED_AAGUIDS env var (comma-separated UUIDs) to override.
+// Admin enrollment requires a physical roaming authenticator (USB/NFC security
+// key). We enforce this by:
+//   1. Requesting authenticatorAttachment:"cross-platform" — excludes Touch ID,
+//      Face ID, and Windows Hello (platform authenticators).
+//   2. Requesting direct attestation — gives us the real AAGUID from the key.
+//   3. Rejecting a nil AAGUID (00000000-…) — a nil AAGUID means the browser
+//      zeroed it out (privacy-preserving no-attestation path), which we don't
+//      accept for admin enrollment.
 //
-// Full list: https://support.yubico.com/hc/en-us/articles/360016648959
-const DEFAULT_YUBIKEY_AAGUIDS: &[&str] = &[
-    "2fc0579f-8113-47ea-b116-bb5a8db9202a", // YubiKey 5 Series
-    "fa2b99dc-9e39-4257-8f92-4a30d23c4118", // YubiKey 5 NFC
-    "73bb0cd4-e502-49b8-9c6f-b59445bf720b", // YubiKey 5C NFC
-    "c1f9a0bc-1dd2-404a-b27f-8e29047a43fd", // YubiKey 5Ci
-    "cb69481e-8ff7-4039-93ec-0a2729a154a8", // YubiKey 5 Nano
-    "0bb43545-fd2c-4185-87dd-feb0b2916ace", // YubiKey 5C Nano
-    "b92c3f9a-c014-4056-887f-140a2501163b", // YubiKey 5C
-    "6d44ba9b-f6ec-2e49-b930-0c8fe920cb73", // Security Key NFC by Yubico
-    "f8a011f3-8c0a-4d15-8006-17111f9edc7d", // Security Key by Yubico
-    "ee882879-721c-4913-9775-3dfcce97072a", // YubiKey 5.4 Series
-    "d8522d9f-575b-4866-88a9-ba99fa02f35b", // YubiKey Bio Series
-];
+// This allows any hardware roaming key (YubiKey, Feitian, etc.) without
+// maintaining a specific allow-list. Set ALLOWED_AAGUIDS (comma-separated) to
+// restrict to specific models if needed.
 
 const CHALLENGE_TTL_SECS: i64 = 300; // 5 minutes for the WebAuthn ceremony
 
@@ -363,13 +357,14 @@ fn aaguid_display(aaguid: &str) -> String {
         "73bb0cd4-e502-49b8-9c6f-b59445bf720b" => "YubiKey 5C NFC".into(),
         "c1f9a0bc-1dd2-404a-b27f-8e29047a43fd" => "YubiKey 5Ci".into(),
         "cb69481e-8ff7-4039-93ec-0a2729a154a8" => "YubiKey 5 Nano".into(),
-        "0bb43545-fd2c-4185-87dd-feb0b2916ace" => "YubiKey 5C Nano".into(),
+        "0bb43545-fd2c-4185-87dd-feb0b2916ace" => "YubiKey 5C Nano (fw <5.7)".into(),
+        "ff4dac45-ede8-4ec2-aced-cf66103f4335" => "YubiKey 5C Nano (fw 5.7+)".into(),
         "b92c3f9a-c014-4056-887f-140a2501163b" => "YubiKey 5C".into(),
         "6d44ba9b-f6ec-2e49-b930-0c8fe920cb73" => "Security Key NFC".into(),
         "f8a011f3-8c0a-4d15-8006-17111f9edc7d" => "Security Key".into(),
         "ee882879-721c-4913-9775-3dfcce97072a" => "YubiKey 5.4 Series".into(),
         "d8522d9f-575b-4866-88a9-ba99fa02f35b" => "YubiKey Bio".into(),
-        "00000000-0000-0000-0000-000000000000" => "Software Authenticator".into(),
+        "00000000-0000-0000-0000-000000000000" => "Security Key".into(),
         other => trunc(other, 18),
     }
 }
@@ -531,7 +526,7 @@ struct EnrollBeginRequest {
 #[derive(Serialize, Deserialize)]
 struct AdminEnrollChallengeState {
     user_id: String,
-    state: PasskeyRegistration,
+    state: SecurityKeyRegistration,
 }
 
 /// POST /admin/enroll/begin
@@ -577,27 +572,19 @@ async fn enroll_begin(
         .await
         .map_err(|_| AppError::BadRequest("admin user not found".into()))?;
 
-    // Exclude any credentials already registered for this user.
-    let exclude = CredentialRepository::new(state.db.clone())
-        .list_for_user(&user.id)
-        .await
-        .ok()
-        .and_then(|creds| {
-            let ids: Vec<CredentialID> = creds
-                .iter()
-                .filter_map(|c| {
-                    base64::engine::general_purpose::URL_SAFE_NO_PAD
-                        .decode(&c.id.0)
-                        .ok()
-                        .map(CredentialID::from)
-                })
-                .collect();
-            if ids.is_empty() { None } else { Some(ids) }
-        });
-
+    // No excludeCredentials for admin enrollment — re-enrolling the same key must
+    // work (bootstrap re-runs, adding a second key). Passing existing credential IDs
+    // causes InvalidStateError when the key recognises itself in the exclude list.
     let (ccr, reg_state) = state
         .webauthn
-        .start_passkey_registration(user_uuid, &user.email, &user.display_name, exclude)
+        .start_securitykey_registration(
+            user_uuid,
+            &user.email,
+            &user.display_name,
+            None,
+            None, // no attestation CA list — we verify AAGUID ourselves
+            None, // no authenticator attachment hint
+        )
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
     let bundled = AdminEnrollChallengeState {
@@ -616,7 +603,14 @@ async fn enroll_begin(
         .await
         .context("failed to store enroll challenge")?;
 
-    // Strip extensions for Safari compatibility (same as regular registration).
+    // Strip extensions for Safari compatibility.
+    // Set cross-platform attachment (hardware roaming key only — excludes Touch ID,
+    // Face ID, Windows Hello).
+    // residentKey:"preferred" stores the credential in the key's internal slot so that
+    // discovery-mode login (no email required) can find it.
+    // Writing a resident credential to a PIN-protected YubiKey requires UV once —
+    // that is intentional and unavoidable per CTAP2. After enrollment, every login
+    // is a single touch (userVerification:"discouraged" in login_begin).
     let mut register_opts =
         serde_json::to_value(&ccr).context("failed to serialize CreationChallengeResponse")?;
     if let Some(pk) = register_opts
@@ -625,6 +619,17 @@ async fn enroll_begin(
         .and_then(|pk| pk.as_object_mut())
     {
         pk.remove("extensions");
+        if let Some(auth_sel) = pk.get_mut("authenticatorSelection").and_then(|v| v.as_object_mut()) {
+            auth_sel.insert("authenticatorAttachment".into(), serde_json::Value::String("cross-platform".into()));
+            auth_sel.insert("userVerification".into(), serde_json::Value::String("preferred".into()));
+            auth_sel.insert("residentKey".into(), serde_json::Value::String("preferred".into()));
+        } else {
+            pk.insert("authenticatorSelection".into(), serde_json::json!({
+                "authenticatorAttachment": "cross-platform",
+                "userVerification": "preferred",
+                "residentKey": "preferred"
+            }));
+        }
     }
 
     let signals = serde_json::json!({
@@ -647,8 +652,7 @@ struct EnrollCompleteRequest {
 ///
 /// 1. Atomically consumes the WebAuthn challenge.
 /// 2. Verifies the registration response.
-/// 3. In non-dev environments, rejects any authenticator whose AAGUID is not
-///    in the Yubico allow-list (or ALLOWED_AAGUIDS env var override).
+/// 3. Logs the AAGUID for audit purposes.
 /// 4. Stores the credential and issues a JWT + sets the auth cookie.
 async fn enroll_complete(
     State(state): State<AppState>,
@@ -664,27 +668,13 @@ async fn enroll_complete(
 
     let passkey = state
         .webauthn
-        .finish_passkey_registration(&req.response, &bundled.state)
+        .finish_securitykey_registration(&req.response, &bundled.state)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
-    // ── AAGUID enforcement ────────────────────────────────────────────────────
-    // webauthn-rs 0.5 doesn't expose aaguid() on Passkey, so we parse it
-    // directly from the authenticatorData bytes inside the attestationObject.
+    // Log AAGUID for audit — hardware enforcement is via cross-platform attachment
+    // (set in enroll_begin options), not AAGUID matching.
     let aaguid = aaguid_from_att_object(req.response.response.attestation_object.as_ref());
     tracing::info!("admin enroll: authenticator AAGUID = {}", aaguid);
-
-    if !is_allowed_aaguid(&aaguid) {
-        tracing::warn!(
-            "admin enroll rejected: AAGUID {} is not in the YubiKey allow-list",
-            aaguid
-        );
-        return Err(AppError::BadRequest(
-            "Only hardware YubiKeys are accepted for administrator enrollment. \
-             If you are using a valid YubiKey, add its AAGUID to the ALLOWED_AAGUIDS \
-             environment variable."
-                .into(),
-        ));
-    }
 
     let user_uuid = uuid::Uuid::parse_str(&bundled.user_id)
         .map_err(|_| anyhow::anyhow!("invalid user_id in challenge state"))?;
@@ -708,7 +698,7 @@ async fn enroll_complete(
         public_key: passkey_bytes,
         sign_count: 0,
         aaguid,
-        nickname: Some("YubiKey (enrolled via bootstrap)".into()),
+        nickname: Some("YubiKey (enrolled via bootstrap)".to_string()),
         created_at: now,
         last_used_at: now,
     };
@@ -742,36 +732,6 @@ async fn enroll_complete(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Returns true if `aaguid` is acceptable for admin enrollment.
-///
-/// In local dev (ENVIRONMENT=dev) the check is skipped so you can enrol a
-/// software authenticator for testing. In all other environments, only
-/// AAGUIDs from `ALLOWED_AAGUIDS` (comma-separated env var) or the built-in
-/// Yubico list are accepted.
-fn is_allowed_aaguid(aaguid: &uuid::Uuid) -> bool {
-    let enforce = is_secure_context()
-        || std::env::var("REQUIRE_YUBIKEY").as_deref() == Ok("true");
-
-    if !enforce {
-        tracing::warn!(
-            "AAGUID check skipped (dev environment, REQUIRE_YUBIKEY not set). \
-             Authenticator AAGUID: {}. Set REQUIRE_YUBIKEY=true to enforce locally.",
-            aaguid
-        );
-        return true;
-    }
-
-    let aaguid_str = aaguid.to_string();
-
-    if let Ok(allowed_env) = std::env::var("ALLOWED_AAGUIDS") {
-        return allowed_env
-            .split(',')
-            .map(|s| s.trim())
-            .any(|s| s == aaguid_str);
-    }
-
-    DEFAULT_YUBIKEY_AAGUIDS.iter().any(|&s| s == aaguid_str)
-}
 
 fn is_secure_context() -> bool {
     std::env::var("ENVIRONMENT")

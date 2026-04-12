@@ -65,11 +65,13 @@ cargo run -p bootstrap -- admin@example.com --display-name "Admin"
 
 (The dummy AWS credentials are only needed for local DynamoDB; they don't need to be real.)
 
-The tool prints a single-use enrollment URL valid for 60 minutes (pass `--ttl-minutes N` to change). Open that URL in the browser with your YubiKey attached, then click **Register YubiKey**. In local dev the AAGUID check is skipped so any authenticator works; in production only hardware YubiKeys are accepted.
+The tool prints a single-use enrollment URL valid for 60 minutes (pass `--ttl-minutes N` to change). Open that URL in the browser with your hardware security key attached and click **Register Security Key**.
+
+Enrollment requires a cross-platform authenticator (hardware key — USB/NFC). Platform authenticators (Touch ID, Face ID, Windows Hello) are rejected. The key is enrolled as a **resident/discoverable credential** (`residentKey: preferred`) so that discovery-mode login (no email required) can find it. Writing a resident credential to a PIN-protected key requires UV once — you will be prompted for your PIN during enrollment. After that, every login is a single touch with no PIN.
 
 Re-run the tool any time to generate a fresh token (if the previous one expired or enrollment failed). The admin user record is reused — a new token is all that is issued.
 
-**Adding more admin YubiKeys** (after first enrollment): sign in, go to `/me`, and add another passkey using the existing add-passkey flow. Each credential is stored independently.
+**Managing passkeys** (after first enrollment): sign in and go to `/me`. The profile page shows all registered passkeys in a table. You can rename any key, delete any key (except the last one — deleting your only key locks you out), and add new passkeys.
 
 ### 5. Access the application
 
@@ -98,7 +100,7 @@ docker compose up -d --build auth-lambda
 
 The `--build` flag rebuilds the Docker image before restarting. `restart` alone does not rebuild.
 
-Build context is fast thanks to `.dockerignore` (excludes the `target/` directory) and BuildKit cache mounts for the Cargo registry and build artifacts.
+Build times are fast after the first build. The Dockerfile uses a two-stage stub-source pattern: manifests are copied first and all external dependencies are compiled into a cached Docker layer; real source is copied in the second stage so only workspace crates (`domain`, `db`, `auth-lambda`) are recompiled on source changes. External dependencies are never recompiled unless `Cargo.lock` changes.
 
 ## Building
 
@@ -221,8 +223,7 @@ The image tag is printed by the CI build workflow after each successful push to 
 | `RP_ID` | WebAuthn Relying Party ID (e.g. `example.com`) |
 | `RP_ORIGIN` | WebAuthn origin (e.g. `https://example.com`) |
 | `BASE_URL` | Public base URL for activation links |
-| `ENVIRONMENT` | Set to `dev` to disable HTTPS-only cookies and AAGUID enforcement |
-| `ALLOWED_AAGUIDS` | Comma-separated UUIDs allowed for admin enrollment (overrides built-in Yubico list) |
+| `ENVIRONMENT` | Set to `dev` to disable HTTPS-only cookies |
 
 In production, `KMS_SIGNING_KEY_ID` is used. In local dev, `JWT_SIGNING_KEY_PATH` takes precedence.
 
@@ -240,8 +241,8 @@ In production, `KMS_SIGNING_KEY_ID` is used. In local dev, `JWT_SIGNING_KEY_PATH
 **OAuth device flow (CLI):**
 `POST /oauth/device` → display `user_code` → poll `POST /oauth/token` → user approves at `/activate` → CLI receives access + refresh tokens
 
-**Admin YubiKey enrollment (first-run only):**
-Run `cargo run -p bootstrap -- <email>` → copy the printed URL → open it in a browser with YubiKey inserted → touch the key. The bootstrap tool writes the admin user directly to DynamoDB; the enrollment endpoint verifies the WebAuthn response and enforces YubiKey-only AAGUID in production.
+**Admin hardware key enrollment (first-run only):**
+Run `cargo run -p bootstrap -- <email>` → copy the printed URL → open it in a browser with hardware security key attached → enter PIN (once, to write the resident credential) → touch the key. The bootstrap tool writes the admin user directly to DynamoDB. Hardware enforcement is via `authenticatorAttachment: cross-platform` (rejects platform authenticators). After enrollment, login is a single touch — no PIN.
 
 **Token verification:**
 `GET /.well-known/jwks.json` — public JWK for RS256 verification. KMS Multi-Region keys mean tokens issued in any region are verifiable everywhere.

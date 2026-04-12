@@ -66,10 +66,13 @@ When these are absent the code uses real AWS services.
 ## Terraform
 
 ```bash
-cd infrastructure/environments/dev   # or prod
-terraform init
-terraform plan
-terraform apply
+# Foundation (DNS, API GW, ECR, DynamoDB, KMS, IAM) — apply rarely
+cd infrastructure/infra
+terraform init && terraform apply
+
+# App (Lambda functions + routes) — apply on every release
+cd infrastructure/app
+terraform init && terraform apply -var="image_tag=sha-<sha>"
 ```
 
 ## Architecture
@@ -157,6 +160,27 @@ WebAuthn requires `navigator.credentials` browser API calls which cannot be expr
 2. Only then generate challenge and send to browser
 3. Browser shows authenticator prompt
 4. `register_complete`: Final server-side verification (email check redundant but safe)
+
+### Admin Enrollment Flow
+
+`GET /admin/enroll?token=<id>` — single-use enrollment page for the first (or additional) hardware key.
+
+The `bootstrap` CLI tool creates an admin user in DynamoDB and stores a single-use `AdminEnrollment` challenge. Opening the enrollment URL:
+1. `POST /admin/enroll/begin` — consumes the token atomically, starts a `SecurityKey` registration ceremony with `authenticatorAttachment: cross-platform`, `residentKey: preferred`, `userVerification: preferred`.
+2. Browser prompts for PIN (once — required by CTAP2 to write a resident credential to a PIN-protected key) then touch.
+3. `POST /admin/enroll/complete` — verifies the response, stores the credential, issues a JWT and redirects to `/me`.
+
+`residentKey: preferred` is essential — it writes the credential to the key's internal storage so that discovery-mode login (empty `allowCredentials`) can find it. After enrollment, login is `userVerification: discouraged` — single touch, no PIN ever again.
+
+The initial nickname is `"YubiKey (enrolled via bootstrap)"` — the admin can rename it from `/me`.
+
+### Credential Management
+
+`PATCH /auth/credentials/{id}` — rename a passkey. Body: `{"nickname": "..."}`. Auth required.
+
+`DELETE /auth/credentials/{id}` — delete a passkey. Returns 400 if it is the user's last credential (would lock them out). Auth required.
+
+The `/me` profile page renders all credentials server-side as a table (nickname, date added, last used). Inline rename: click Rename → edit in place → Enter or Save button. Delete button is hidden when only one credential remains.
 
 ### Admin Dashboard
 

@@ -300,15 +300,20 @@ async fn login_begin(
         .await
         .context("failed to store challenge")?;
 
-    // Convert rcr to JSON and remove extensions (Safari compatibility)
+    // Strip extensions (Safari compatibility) and set userVerification: "discouraged"
+    // so hardware keys (YubiKey etc.) only require a touch, not a PIN.
     let mut login_opts = serde_json::to_value(&rcr)
         .context("failed to serialize RequestChallengeResponse")?;
-    if let Some(obj) = login_opts.as_object_mut() {
-        if let Some(pk) = obj.get_mut("publicKey") {
-            if let Some(pk_obj) = pk.as_object_mut() {
-                pk_obj.remove("extensions");
-            }
-        }
+    if let Some(pk) = login_opts
+        .as_object_mut()
+        .and_then(|o| o.get_mut("publicKey"))
+        .and_then(|pk| pk.as_object_mut())
+    {
+        pk.remove("extensions");
+        pk.insert(
+            "userVerification".into(),
+            serde_json::Value::String("discouraged".into()),
+        );
     }
 
     let signals = serde_json::json!({

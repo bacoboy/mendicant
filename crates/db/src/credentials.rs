@@ -172,6 +172,25 @@ impl CredentialRepository {
         }
     }
 
+    pub async fn update_nickname(
+        &self,
+        user_id: &UserId,
+        id: &CredentialId,
+        nickname: &str,
+    ) -> Result<(), DbError> {
+        self.db.inner
+            .update_item()
+            .table_name(&self.db.credentials_table)
+            .key("pk", pk(user_id))
+            .key("sk", sk(id))
+            .update_expression("SET nickname = :nick")
+            .expression_attribute_values(":nick", AttributeValue::S(nickname.to_string()))
+            .send()
+            .await
+            .map_err(map_update_error)?;
+        Ok(())
+    }
+
     pub async fn delete(&self, user_id: &UserId, id: &CredentialId) -> Result<(), DbError> {
         self.db.inner
             .delete_item()

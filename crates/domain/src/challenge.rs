@@ -93,11 +93,14 @@ mod tests {
     }
 
     #[test]
-    fn admin_enrollment_challenge_carries_user_id_and_empty_state() {
+    fn admin_enrollment_challenge_carries_user_id_and_nickname() {
         let uid = "user-xyz".to_string();
-        let c = Challenge::new_admin_enrollment(uid.clone(), 9999999999);
+        let c = Challenge::new_admin_enrollment(uid.clone(), Some("Steve's key".into()), 9999999999);
         assert_eq!(c.challenge_type, ChallengeType::AdminEnrollment);
         assert_eq!(c.user_id.as_deref(), Some("user-xyz"));
-        assert!(c.state_json.is_empty());
+        assert_eq!(c.state_json, "Steve's key");
+
+        let c2 = Challenge::new_admin_enrollment(uid.clone(), None, 9999999999);
+        assert!(c2.state_json.is_empty());
     }
 }

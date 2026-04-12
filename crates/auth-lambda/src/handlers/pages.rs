@@ -6,7 +6,9 @@ use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use std::collections::HashMap;
 use anyhow;
+use time::OffsetDateTime;
 
+use db::credentials::CredentialRepository;
 use db::users::UserRepository;
 use domain::user::UserId;
 
@@ -47,6 +49,14 @@ struct ActivatePage {
     prefill_code: String,
 }
 
+struct CredentialRow {
+    id: String,
+    nickname: String,
+    last_used_at: String,
+    created_at: String,
+    can_delete: bool,
+}
+
 #[derive(Template)]
 #[template(path = "profile.html")]
 #[allow(dead_code)]
@@ -56,6 +66,7 @@ struct ProfilePage {
     display_name: String,
     role: String,
     status: String,
+    credentials: Vec<CredentialRow>,
     debug_jwt_sub: String,
     debug_jwt_email: String,
     debug_jwt_role: String,
@@ -92,13 +103,30 @@ async fn profile_page(
         .map(UserId)
         .map_err(|_| AppError::Internal(anyhow::anyhow!("malformed sub in token")))?;
 
-    let user = UserRepository::new(state.db)
+    let user = UserRepository::new(state.db.clone())
         .get(&user_id)
         .await
         .map_err(|e| match e {
             db::error::DbError::NotFound => AppError::NotFound,
             other => AppError::Internal(other.into()),
         })?;
+
+    let raw_creds = CredentialRepository::new(state.db)
+        .list_for_user(&user_id)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    let can_delete = raw_creds.len() > 1;
+    let credentials: Vec<CredentialRow> = raw_creds
+        .into_iter()
+        .map(|c| CredentialRow {
+            id: c.id.0,
+            nickname: c.nickname.unwrap_or_else(|| "Unnamed passkey".to_string()),
+            last_used_at: fmt_dt(c.last_used_at),
+            created_at: fmt_dt(c.created_at),
+            can_delete,
+        })
+        .collect();
 
     let role = serde_json::to_value(&user.role)
         .and_then(|v| serde_json::from_value::<String>(v))
@@ -113,12 +141,24 @@ async fn profile_page(
         display_name: user.display_name,
         role,
         status,
+        credentials,
         debug_jwt_sub: claims.sub.clone(),
         debug_jwt_email: claims.email.clone(),
         debug_jwt_role: serde_json::to_string(&claims.role).unwrap_or_default(),
     };
 
     Ok(render(page))
+}
+
+fn fmt_dt(dt: OffsetDateTime) -> String {
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02} UTC",
+        dt.year(),
+        dt.month() as u8,
+        dt.day(),
+        dt.hour(),
+        dt.minute(),
+    )
 }
 
 /// POST /logout — clear the auth cookie and redirect to login

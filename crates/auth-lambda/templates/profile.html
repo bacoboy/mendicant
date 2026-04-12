@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Profile – Mendicant</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 500px; margin: 5vh auto; padding: 1rem; }
+    [hidden] { display: none !important; }
+    body { font-family: system-ui, sans-serif; max-width: 560px; margin: 5vh auto; padding: 1rem; }
     h1 { font-size: 1.5rem; margin-bottom: 2rem; }
+    h2 { font-size: 1.1rem; margin: 0 0 1rem; }
     .error-alert { background: #fee; color: #c00; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; border: 1px solid #fcc; display: none; }
     .error-alert.show { display: block; }
     .profile-section { background: #f5f5f5; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; }
@@ -14,12 +16,25 @@
     .profile-label { font-size: .9rem; color: #555; margin-bottom: .25rem; }
     .profile-value { font-size: 1rem; word-break: break-word; }
     .profile-value.monospace { font-family: monospace; font-size: .9rem; }
-    .button-group { display: flex; gap: 1rem; }
-    button { padding: .65rem 1.5rem; font-size: 1rem; border: none; border-radius: 4px; cursor: pointer; }
+    /* Passkey table */
+    .passkey-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: .9rem; }
+    .passkey-table th { text-align: left; padding: .4rem .6rem; font-size: .8rem; color: #555; border-bottom: 2px solid #ddd; white-space: nowrap; }
+    .passkey-table td { padding: .55rem .6rem; border-bottom: 1px solid #eee; vertical-align: middle; }
+    .passkey-table tr:last-child td { border-bottom: none; }
+    .passkey-nickname { font-weight: 500; }
+    .passkey-meta { font-size: .78rem; color: #888; }
+    .passkey-edit { display: flex; gap: .4rem; align-items: center; }
+    .passkey-edit input { flex: 1; padding: .3rem .45rem; font-size: .88rem; border: 1px solid #ccc; border-radius: 4px; min-width: 0; }
+    td.actions { white-space: nowrap; text-align: right; }
+    button { padding: .4rem .85rem; font-size: .9rem; border: none; border-radius: 4px; cursor: pointer; }
     .btn-primary { background: #0070f3; color: #fff; }
     .btn-primary:hover { background: #0051a2; }
     .btn-secondary { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
     .btn-secondary:hover { background: #e0e0e0; }
+    .btn-danger { background: #fff0f0; color: #c00; border: 1px solid #fcc; }
+    .btn-danger:hover { background: #ffe0e0; }
+    .btn-sm { padding: .3rem .65rem; font-size: .82rem; }
+    .button-group { display: flex; gap: 1rem; }
     .links { margin-top: 2rem; text-align: center; font-size: .9rem; }
     .links a { margin: 0 .5rem; color: #0070f3; text-decoration: none; }
     .links a:hover { text-decoration: underline; }
@@ -35,27 +50,63 @@
       <div class="profile-label">Name</div>
       <div class="profile-value">{{ display_name }}</div>
     </div>
-
     <div class="profile-field">
       <div class="profile-label">Email</div>
       <div class="profile-value">{{ email }}</div>
     </div>
-
     <div class="profile-field">
       <div class="profile-label">Role</div>
       <div class="profile-value">{{ role }}</div>
     </div>
-
     <div class="profile-field">
       <div class="profile-label">Status</div>
       <div class="profile-value">{{ status }}</div>
     </div>
-
     <div class="profile-field">
       <div class="profile-label">User ID</div>
       <div class="profile-value monospace">{{ id }}</div>
     </div>
   </div>
+
+  <h2>Passkeys</h2>
+  {% if credentials.is_empty() %}
+  <p style="color:#888;font-size:.9rem;margin-bottom:1.5rem;">No passkeys registered.</p>
+  {% else %}
+  <table class="passkey-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Added</th>
+        <th>Last used</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for cred in credentials %}
+    <tr data-cred-id="{{ cred.id }}">
+      <td>
+        <div class="passkey-nickname">{{ cred.nickname }}</div>
+        <div class="passkey-edit" hidden>
+          <input type="text" class="passkey-input" value="{{ cred.nickname }}" maxlength="64">
+          <button class="btn-secondary btn-sm" onclick="saveNickname(this)">Save</button>
+          <button class="btn-secondary btn-sm" onclick="cancelEdit(this)">Cancel</button>
+        </div>
+      </td>
+      <td class="passkey-meta">{{ cred.created_at }}</td>
+      <td class="passkey-meta">{{ cred.last_used_at }}</td>
+      <td class="actions">
+        <div class="passkey-actions">
+          <button class="btn-secondary btn-sm" onclick="startEdit(this)">Rename</button>
+          {% if cred.can_delete %}
+          <button class="btn-danger btn-sm" onclick="deleteKey(this)">Delete</button>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 
   <div class="button-group">
     <button class="btn-primary" onclick="addPasskey()" id="add-passkey-btn">Add Passkey</button>
@@ -84,7 +135,81 @@ status: {{ status }}</pre>
   </div>
 
   <script>
-    // Helper to convert base64url to Uint8Array
+    function showError(message) {
+      const alert = document.getElementById('error-alert');
+      alert.textContent = message;
+      alert.classList.add('show');
+      setTimeout(() => alert.classList.remove('show'), 6000);
+    }
+
+    // ── Passkey rename ────────────────────────────────────────────────────────
+
+    function startEdit(btn) {
+      const row = btn.closest('tr');
+      row.querySelector('.passkey-nickname').hidden = true;
+      row.querySelector('.passkey-actions').hidden = true;
+      const edit = row.querySelector('.passkey-edit');
+      edit.hidden = false;
+      const input = edit.querySelector('input');
+      input.focus();
+      input.addEventListener('keydown', function onKey(e) {
+        if (e.key === 'Enter') { e.preventDefault(); saveNickname(input); }
+        if (e.key === 'Escape') { cancelEdit(input); input.removeEventListener('keydown', onKey); }
+      });
+    }
+
+    function cancelEdit(btn) {
+      const row = btn.closest('tr');
+      row.querySelector('.passkey-nickname').hidden = false;
+      row.querySelector('.passkey-actions').hidden = false;
+      row.querySelector('.passkey-edit').hidden = true;
+    }
+
+    async function saveNickname(btn) {
+      const row = btn.closest('tr');
+      const credId = row.dataset.credId;
+      const input = row.querySelector('.passkey-input');
+      const nickname = input.value.trim();
+      if (!nickname) { showError('Nickname cannot be empty.'); return; }
+
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/auth/credentials/${credId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nickname }),
+        });
+        if (!resp.ok) throw new Error(await resp.text() || 'Rename failed');
+        row.querySelector('.passkey-nickname').textContent = nickname;
+        // Keep the input value in sync for a subsequent edit.
+        cancelEdit(btn);
+      } catch (e) {
+        showError('Rename failed: ' + e.message);
+        btn.disabled = false;
+      }
+    }
+
+    // ── Passkey delete ────────────────────────────────────────────────────────
+
+    async function deleteKey(btn) {
+      const row = btn.closest('tr');
+      const credId = row.dataset.credId;
+      const nickname = row.querySelector('.passkey-nickname').textContent;
+      if (!confirm(`Delete passkey "${nickname}"?\n\nThis cannot be undone.`)) return;
+
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/auth/credentials/${credId}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error(await resp.text() || 'Delete failed');
+        window.location.reload();
+      } catch (e) {
+        showError('Delete failed: ' + e.message);
+        btn.disabled = false;
+      }
+    }
+
+    // ── Add passkey ───────────────────────────────────────────────────────────
+
     function b64urlToBytes(str) {
       const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
       const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
@@ -94,7 +219,6 @@ status: {{ status }}</pre>
       return out;
     }
 
-    // Helper to convert Uint8Array to base64url
     function bytesToB64url(buf) {
       const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
       let b64 = '';
@@ -105,101 +229,41 @@ status: {{ status }}</pre>
       return btoa(b64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     }
 
-    // Show error alert
-    function showError(message) {
-      const alert = document.getElementById('error-alert');
-      alert.textContent = message;
-      alert.classList.add('show');
-      setTimeout(() => alert.classList.remove('show'), 5000); // Auto-hide after 5 seconds
-    }
-
-    // Add passkey for authenticated user
     async function addPasskey() {
       const btn = document.getElementById('add-passkey-btn');
-      const alert = document.getElementById('error-alert');
-      alert.classList.remove('show');
+      document.getElementById('error-alert').classList.remove('show');
       btn.disabled = true;
       btn.textContent = 'Adding passkey...';
 
       try {
-        // Step 1: Get the registration challenge
         const beginResp = await fetch('/auth/passkey/add/begin', { method: 'POST' });
         if (!beginResp.ok) throw new Error('Failed to start registration');
 
-        // Parse SSE response
         const text = await beginResp.text();
-        console.log('SSE response:', text);
         const match = text.match(/data: signals ({.*})/);
         if (!match) throw new Error('Invalid challenge response');
         const signals = JSON.parse(match[1]);
         let options = signals.registerOptions;
+        if (options.publicKey) options = options.publicKey;
 
-        console.log('Register options:', options);
-        console.log('Keys:', Object.keys(options || {}));
-
-        // Handle nested publicKey field if present
-        if (options.publicKey) {
-          options = options.publicKey;
-          console.log('Extracted publicKey options:', options);
-        }
-
-        // Log what we actually have
-        console.log('Options object keys:', Object.keys(options || {}));
-        console.log('Full options:', JSON.stringify(options, null, 2));
-
-        // Convert challenge and userID from base64url
-        if (!options.challenge) throw new Error('No challenge in response: ' + JSON.stringify(options));
-        if (!options.user?.id) throw new Error('No user.id in response');
-
-        console.log('Before conversion - challenge type:', typeof options.challenge, 'value:', options.challenge);
-        console.log('Before conversion - user.id type:', typeof options.user.id, 'value:', options.user.id);
-
-        // Only convert if they're strings
-        if (typeof options.challenge === 'string') {
-          options.challenge = b64urlToBytes(options.challenge);
-        }
-        if (typeof options.user.id === 'string') {
-          options.user.id = b64urlToBytes(options.user.id);
-        }
-
-        console.log('After conversion - challenge type:', options.challenge.constructor.name, 'length:', options.challenge.length);
-        console.log('After conversion - user.id type:', options.user.id.constructor.name, 'length:', options.user.id.length);
-
-        // Convert exclude credentials
-        if (options.excludeCredentials && Array.isArray(options.excludeCredentials)) {
-          options.excludeCredentials = options.excludeCredentials.map(cred => ({
-            ...cred,
-            id: b64urlToBytes(cred.id)
+        if (typeof options.challenge === 'string') options.challenge = b64urlToBytes(options.challenge);
+        if (typeof options.user?.id === 'string') options.user.id = b64urlToBytes(options.user.id);
+        if (options.excludeCredentials) {
+          options.excludeCredentials = options.excludeCredentials.map(c => ({
+            ...c, id: b64urlToBytes(c.id),
           }));
         }
-
-        // Remove extensions that Safari doesn't support
-        // Keep only standard WebAuthn extensions
         if (options.extensions) {
-          const standardExtensions = {};
-          const standardNames = ['credProps', 'hmacGetSecret', 'hmacSecret', 'minPinLength'];
-          for (const key of standardNames) {
-            if (key in options.extensions) {
-              standardExtensions[key] = options.extensions[key];
-            }
+          const std = {};
+          for (const k of ['credProps', 'hmacGetSecret', 'hmacSecret', 'minPinLength']) {
+            if (k in options.extensions) std[k] = options.extensions[k];
           }
-          options.extensions = standardExtensions;
+          options.extensions = std;
         }
 
-        // Step 2: Create credential with navigator
-        console.log('About to call navigator.credentials.create with options:', { publicKey: options });
-        let credential;
-        try {
-          credential = await navigator.credentials.create({ publicKey: options });
-        } catch (e) {
-          console.error('navigator.credentials.create error:', e.name, e.message);
-          throw new Error(`Credential creation failed: ${e.name}: ${e.message}`);
-        }
-
+        const credential = await navigator.credentials.create({ publicKey: options });
         if (!credential) throw new Error('Credential creation was cancelled');
-        console.log('Credential created:', credential);
 
-        // Step 3: Send credential to server
         const serialized = {
           id: credential.id,
           rawId: bytesToB64url(credential.rawId),
@@ -209,32 +273,22 @@ status: {{ status }}</pre>
           response: {
             attestationObject: bytesToB64url(credential.response.attestationObject),
             clientDataJSON: bytesToB64url(credential.response.clientDataJSON),
-            ...(credential.response.getTransports ? { transports: credential.response.getTransports() } : {})
-          }
+            ...(credential.response.getTransports ? { transports: credential.response.getTransports() } : {}),
+          },
         };
-        console.log('Serialized credential:', serialized);
-
-        const body = JSON.stringify({
-          challenge_id: signals.challengeId,
-          response: serialized
-        });
-        console.log('Request body length:', body.length);
 
         const completeResp = await fetch('/auth/passkey/add/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: body
+          body: JSON.stringify({ challenge_id: signals.challengeId, response: serialized }),
         });
 
         if (completeResp.ok) {
-          // Wait for redirect
-          setTimeout(() => { window.location.href = '/me'; }, 100);
+          window.location.reload();
         } else {
-          const error = await completeResp.text();
-          throw new Error(error || 'Failed to register passkey');
+          throw new Error(await completeResp.text() || 'Failed to register passkey');
         }
       } catch (e) {
-        console.error('Passkey registration failed:', e);
         showError('Failed to add passkey: ' + e.message);
         btn.disabled = false;
         btn.textContent = 'Add Passkey';
