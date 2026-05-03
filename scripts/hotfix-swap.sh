@@ -15,57 +15,43 @@
 set -euo pipefail
 
 ACTION=${1:-}
-REGION=${2:-us-east-2}
+REGION=${2:-all}
 PREFIX=mendicant-prod
 ACCOUNT_ID=054297229654
 
 if [[ "${ACTION}" != "activate" && "${ACTION}" != "deactivate" ]]; then
-    echo "Usage: $0 activate|deactivate [region]"
+    echo "Usage: $0 activate|deactivate [us-east-2|us-west-2|all]"
     exit 1
 fi
 
-# Resolve function ARNs
-prod_auth_arn="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${PREFIX}-auth-${REGION}"
-prod_users_arn="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${PREFIX}-users-${REGION}"
-hotfix_auth_arn="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${PREFIX}-auth-hotfix-${REGION}"
-hotfix_users_arn="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${PREFIX}-users-hotfix-${REGION}"
+case "${REGION}" in
+    us-east-2|us-west-2) REGIONS=("${REGION}") ;;
+    all)                 REGIONS=(us-east-2 us-west-2) ;;
+    *) echo "Error: unknown region '${REGION}'. Use us-east-2, us-west-2, or all."; exit 1 ;;
+esac
 
 arn_to_integration_uri() {
-    echo "arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${1}/invocations"
+    local region=$1 arn=$2
+    echo "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${arn}/invocations"
 }
 
-# Find the API GW
-echo "==> Finding API Gateway..."
-api_id=$(aws apigatewayv2 get-apis \
-    --region "${REGION}" \
-    --query "Items[?Name=='${PREFIX}-api'].ApiId" \
-    --output text)
-
-if [[ -z "${api_id}" ]]; then
-    echo "Error: could not find API Gateway named '${PREFIX}-api' in ${REGION}"
-    exit 1
-fi
-echo "    API Gateway: ${api_id}"
-
-# Find integration IDs by matching current integration URI
 get_integration_id() {
-    local function_arn=$1
+    local region=$1 api_id=$2 function_arn=$3
     local uri
-    uri=$(arn_to_integration_uri "${function_arn}")
+    uri=$(arn_to_integration_uri "${region}" "${function_arn}")
     aws apigatewayv2 get-integrations \
-        --region "${REGION}" \
+        --region "${region}" \
         --api-id "${api_id}" \
         --query "Items[?IntegrationUri=='${uri}'].IntegrationId" \
         --output text
 }
 
 update_integration() {
-    local integration_id=$1
-    local target_arn=$2
+    local region=$1 api_id=$2 integration_id=$3 target_arn=$4
     local uri
-    uri=$(arn_to_integration_uri "${target_arn}")
+    uri=$(arn_to_integration_uri "${region}" "${target_arn}")
     aws apigatewayv2 update-integration \
-        --region "${REGION}" \
+        --region "${region}" \
         --api-id "${api_id}" \
         --integration-id "${integration_id}" \
         --integration-uri "${uri}" \
@@ -73,44 +59,73 @@ update_integration() {
         --query 'IntegrationId' > /dev/null
 }
 
-if [[ "${ACTION}" == "activate" ]]; then
-    echo "==> Switching to hotfix Lambdas..."
+swap_region() {
+    local region=$1
 
-    auth_integration=$(get_integration_id "${prod_auth_arn}")
-    users_integration=$(get_integration_id "${prod_users_arn}")
+    local prod_auth_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-auth-${region}"
+    local prod_users_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-users-${region}"
+    local hotfix_auth_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-auth-hotfix-${region}"
+    local hotfix_users_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-users-hotfix-${region}"
 
-    if [[ -z "${auth_integration}" || -z "${users_integration}" ]]; then
-        echo "Error: could not find prod integrations — are they already swapped?"
+    echo "==> [${region}] Finding API Gateway..."
+    local api_id
+    api_id=$(aws apigatewayv2 get-apis \
+        --region "${region}" \
+        --query "Items[?Name=='${PREFIX}-api'].ApiId" \
+        --output text)
+
+    if [[ -z "${api_id}" ]]; then
+        echo "Error: could not find API Gateway named '${PREFIX}-api' in ${region}"
         exit 1
     fi
+    echo "    API Gateway: ${api_id}"
 
-    update_integration "${auth_integration}" "${hotfix_auth_arn}"
-    echo "    ✓ auth  → hotfix"
+    if [[ "${ACTION}" == "activate" ]]; then
+        echo "==> [${region}] Switching to hotfix Lambdas..."
 
-    update_integration "${users_integration}" "${hotfix_users_arn}"
-    echo "    ✓ users → hotfix"
+        local auth_integration users_integration
+        auth_integration=$(get_integration_id "${region}" "${api_id}" "${prod_auth_arn}")
+        users_integration=$(get_integration_id "${region}" "${api_id}" "${prod_users_arn}")
 
+        if [[ -z "${auth_integration}" || -z "${users_integration}" ]]; then
+            echo "Error: could not find prod integrations in ${region} — are they already swapped?"
+            exit 1
+        fi
+
+        update_integration "${region}" "${api_id}" "${auth_integration}" "${hotfix_auth_arn}"
+        echo "    ✓ auth  → hotfix"
+
+        update_integration "${region}" "${api_id}" "${users_integration}" "${hotfix_users_arn}"
+        echo "    ✓ users → hotfix"
+
+    else
+        echo "==> [${region}] Restoring prod Lambdas..."
+
+        local auth_integration users_integration
+        auth_integration=$(get_integration_id "${region}" "${api_id}" "${hotfix_auth_arn}")
+        users_integration=$(get_integration_id "${region}" "${api_id}" "${hotfix_users_arn}")
+
+        if [[ -z "${auth_integration}" || -z "${users_integration}" ]]; then
+            echo "Error: could not find hotfix integrations in ${region} — are they already restored?"
+            exit 1
+        fi
+
+        update_integration "${region}" "${api_id}" "${auth_integration}" "${prod_auth_arn}"
+        echo "    ✓ auth  → prod"
+
+        update_integration "${region}" "${api_id}" "${users_integration}" "${prod_users_arn}"
+        echo "    ✓ users → prod"
+    fi
+}
+
+for r in "${REGIONS[@]}"; do
+    swap_region "${r}"
     echo ""
+done
+
+if [[ "${ACTION}" == "activate" ]]; then
     echo "Hotfix active. Test at https://api.mendicant.io"
     echo "Restore when done: $0 deactivate ${REGION}"
-
 else
-    echo "==> Restoring prod Lambdas..."
-
-    auth_integration=$(get_integration_id "${hotfix_auth_arn}")
-    users_integration=$(get_integration_id "${hotfix_users_arn}")
-
-    if [[ -z "${auth_integration}" || -z "${users_integration}" ]]; then
-        echo "Error: could not find hotfix integrations — are they already restored?"
-        exit 1
-    fi
-
-    update_integration "${auth_integration}" "${prod_auth_arn}"
-    echo "    ✓ auth  → prod"
-
-    update_integration "${users_integration}" "${prod_users_arn}"
-    echo "    ✓ users → prod"
-
-    echo ""
     echo "Prod restored."
 fi

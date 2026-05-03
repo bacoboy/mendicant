@@ -1,44 +1,37 @@
 #!/usr/bin/env bash
-# Hotfix deploy: build locally with cargo lambda → push directly to hotfix Lambda.
+# Hotfix deploy: build locally with cargo lambda → push to hotfix Lambdas in both regions.
 # No Docker, no ECR, no Terraform. Fast iteration against real AWS.
 #
 # Usage:
-#   ./scripts/dev-deploy.sh [auth|users|both] [region]
+#   ./scripts/dev-deploy.sh
 #
-# Defaults: both lambdas, us-east-2
-#
-# Test via the function URLs printed by: cd infrastructure/app && terraform output
-# When ready to promote: push to main and let CI build the real image.
+# Then use hotfix-swap.sh to route traffic to/from the hotfix functions.
 
 set -euo pipefail
 
-LAMBDA=${1:-both}
-REGION=${2:-us-east-2}
+ulimit -n 8192
+
+REGIONS=(us-east-2 us-west-2)
+LAMBDAS=(auth users)
 PREFIX=mendicant-prod
 
-deploy() {
-    local name=$1
-    local function_name="${PREFIX}-${name}-hotfix-${REGION}"
-
+for name in "${LAMBDAS[@]}"; do
     echo "==> Building ${name}-lambda (arm64)..."
     cargo lambda build --release -p "${name}-lambda" --arm64
+done
 
-    echo "==> Deploying to ${function_name}..."
-    cargo lambda deploy \
-        --binary-name "${name}-lambda" \
-        --function-name "${function_name}" \
-        --region "${REGION}" \
-        --no-build
-
-    echo "    ✓ ${name}-lambda hotfix live"
-}
-
-case "${LAMBDA}" in
-    auth)  deploy auth ;;
-    users) deploy users ;;
-    both)  deploy auth; deploy users ;;
-    *)     echo "Usage: $0 [auth|users|both] [region]"; exit 1 ;;
-esac
+for name in "${LAMBDAS[@]}"; do
+    for region in "${REGIONS[@]}"; do
+        function_name="${PREFIX}-${name}-hotfix-${region}"
+        echo "==> Deploying ${name}-lambda → ${function_name}..."
+        cargo lambda deploy \
+            --binary-name "${name}-lambda" \
+            --region "${region}" \
+            "${function_name}"
+        echo "    ✓ done"
+    done
+done
 
 echo ""
-echo "Run ./scripts/hotfix-swap.sh activate to route traffic to the hotfix function."
+echo "Both lambdas deployed to both regions."
+echo "Run ./scripts/hotfix-swap.sh activate to route traffic to the hotfix functions."
