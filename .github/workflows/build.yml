@@ -25,6 +25,7 @@ jobs:
           context: .
           file: crates/auth-lambda/Dockerfile
           platforms: linux/arm64
+          pull: true
           tags: auth-lambda:${{ github.sha }}
           outputs: type=docker,dest=/tmp/auth-lambda.tar
           cache-from: type=gha,scope=auth-lambda
@@ -36,6 +37,7 @@ jobs:
           context: .
           file: crates/users-lambda/Dockerfile
           platforms: linux/arm64
+          pull: true
           tags: users-lambda:${{ github.sha }}
           outputs: type=docker,dest=/tmp/users-lambda.tar
           cache-from: type=gha,scope=users-lambda
