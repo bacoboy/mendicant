@@ -21,11 +21,14 @@
 <body>
   <h1>Create your account</h1>
 
-  <div data-signals='{"email":"","emailError":""}'>
+  <div data-signals='{"email":"","inviteCode":"","emailError":""}'>
     <div data-show="$emailError !== ''" class="error" data-text="$emailError"></div>
 
     <label for="email">Email address</label>
     <input id="email" type="email" data-bind="email" placeholder="you@example.com" autocomplete="username">
+
+    <label for="inviteCode">Invite code</label>
+    <input id="inviteCode" type="text" data-bind="inviteCode" placeholder="Enter your invite code">
 
     <button type="button" data-on-click="registerEmail">Continue</button>
 

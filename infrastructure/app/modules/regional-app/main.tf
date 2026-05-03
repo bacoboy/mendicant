@@ -40,6 +40,9 @@ locals {
   ecr_auth      = data.aws_ecr_repository.auth_lambda.repository_url
   ecr_users     = data.aws_ecr_repository.users_lambda.repository_url
 
+  # Temporary static invite code — replace with a DB-backed system when registration opens.
+  invite_code = "mK9xP2nQ4w"
+
   lambda_env = {
     TABLE_USERS                = "${local.prefix}-users"
     TABLE_CREDENTIALS          = "${local.prefix}-credentials"
@@ -53,5 +56,6 @@ locals {
     BASE_URL                   = var.base_url
     ENVIRONMENT                = var.environment
     AWS_USE_DUALSTACK_ENDPOINT = "true"
+    INVITE_CODE                = local.invite_code
   }
 }

@@ -19,6 +19,8 @@ pub struct AppState {
     /// Pre-computed RS256 decoding key so JWT verification is I/O-free
     /// on the request path.
     pub decoding_key: DecodingKey,
+    /// Invite code required for new account registration. Set via INVITE_CODE env var.
+    pub invite_code: String,
 }
 
 impl AppState {
@@ -61,7 +63,10 @@ impl AppState {
             webauthn_map.insert(origin.to_string(), wa);
         }
 
-        Ok(Self { db, signer, webauthn_map, decoding_key })
+        let invite_code = std::env::var("INVITE_CODE")
+            .unwrap_or_else(|_| "changeme".into());
+
+        Ok(Self { db, signer, webauthn_map, decoding_key, invite_code })
     }
 
     /// Returns the Webauthn instance for the given request origin, or None if

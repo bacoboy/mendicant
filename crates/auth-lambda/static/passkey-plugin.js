@@ -251,11 +251,17 @@ async function doRegisterEmail(ctx, email) {
     return;
   }
 
+  const inviteCode = window.root?.inviteCode || window.Datastar?.root?.inviteCode || '';
+  if (!inviteCode) {
+    setSignal('emailError', 'Please enter your invite code.');
+    return;
+  }
+
   try {
     const response = await fetch('/auth/register/email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, invite_code: inviteCode }),
     });
 
     const data = await response.json();
@@ -534,6 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[passkey-plugin] Email register clicked:', { email });
       await doRegisterEmail(null, email);
     });
+
     console.log('[passkey-plugin] Email register button listener attached');
   }
 

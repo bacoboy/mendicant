@@ -44,6 +44,7 @@ pub fn routes() -> Router<AppState> {
 #[derive(Deserialize)]
 struct RegisterEmailRequest {
     email: String,
+    invite_code: String,
 }
 
 #[derive(Serialize)]
@@ -62,6 +63,16 @@ async fn register_email(
     State(state): State<AppState>,
     Json(req): Json<RegisterEmailRequest>,
 ) -> Result<Json<RegisterEmailResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // Check invite code before doing any DB work
+    if req.invite_code != state.invite_code {
+        return Err((
+            axum::http::StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "Invalid invite code".into(),
+            }),
+        ));
+    }
+
     // Check if email is already registered
     let users_repo = UserRepository::new(state.db.clone());
     if users_repo.get_by_email(&req.email).await.is_ok() {
