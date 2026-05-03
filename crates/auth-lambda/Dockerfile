@@ -34,7 +34,9 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
 # ── Application build ─────────────────────────────────────────────────────────
 # Re-runs when any source file changes, but external deps are already compiled
 # above so only workspace crates (domain, db, auth-lambda) are recompiled.
+# touch ensures cargo sees real sources as newer than the empty stubs above.
 COPY crates/ crates/
+RUN find crates -name "*.rs" -exec touch {} +
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
     cargo lambda build --release -p auth-lambda --arm64 \
