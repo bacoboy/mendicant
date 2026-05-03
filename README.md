@@ -6,8 +6,9 @@ Multi-region serverless auth platform on AWS. Passkey-only authentication, role-
 
 - Rust toolchain (`rustup`)
 - Docker (for DynamoDB Local, Lambda RIE, local-apigw, Caddy)
-- Terraform >= 1.9.0 (for deployment only)
-- AWS CLI with local profile configured (for DynamoDB setup)
+- Terraform >= 1.15 (for deployment only)
+- AWS CLI with credentials configured
+- `cargo-lambda` (`cargo install cargo-lambda`) — for hotfix deploys only
 
 ## Local Development
 
@@ -181,21 +182,32 @@ crates/
   bootstrap/    # CLI tool: create first admin user + emit YubiKey enrollment URL.
 
 infrastructure/
-  infra/                  # Foundation — DNS, API GW, ECR, DynamoDB, KMS, IAM
+  ci/                     # Build pipeline — GitHub OIDC role, ECR repos
+  infra/                  # Foundation — DNS, API GW, DynamoDB, KMS, IAM
     main.tf               # Global resources inlined; calls regional module per region
     modules/regional/     # Per-region infra resources
   app/                    # Deployment — Lambda functions + API GW routes
     main.tf               # Calls regional-app module per region
     variables.tf          # image_tag variable
-    modules/regional-app/ # Lambda + integrations + routes
+    modules/regional-app/ # Lambda + integrations + routes (prod + hotfix variants)
+
+scripts/
+  dev-deploy.sh           # Build + push to hotfix Lambda via cargo lambda
+  hotfix-swap.sh          # Activate/deactivate hotfix in API Gateway
+  setup-dynamodb-local.sh # Create DynamoDB tables for local dev
 ```
 
 ## Deployment
 
-Two separate Terraform projects with different change cadence:
+Three separate Terraform projects with different change cadence:
 
 ```bash
-# Foundation (DNS, API GW, ECR, DynamoDB, KMS, IAM) — apply rarely
+# CI (GitHub OIDC role, ECR repos) — apply once, rarely touched
+cd infrastructure/ci
+terraform init
+terraform apply
+
+# Foundation (DNS, API GW, DynamoDB, KMS, IAM) — apply rarely
 cd infrastructure/infra
 terraform init
 terraform apply
@@ -207,6 +219,50 @@ terraform apply -var="image_tag=sha-<sha>"
 ```
 
 The image tag is printed by the CI build workflow after each successful push to `main`. `us-east-2` is the designated global region; `us-west-2` is a replica.
+
+## Hotfix Deploys (fast iteration against real AWS)
+
+Zip-based `*-hotfix-*` Lambda functions sit alongside the prod functions, sharing the same IAM role, env vars, and DynamoDB tables. `cargo lambda` pushes code directly — no Docker, no ECR, ~30 seconds per deploy.
+
+**Prerequisite:** `cargo install cargo-lambda`
+
+### Deploy code to the hotfix function
+
+```bash
+./scripts/dev-deploy.sh          # both lambdas (default region: us-east-2)
+./scripts/dev-deploy.sh auth     # auth only
+./scripts/dev-deploy.sh users    # users only
+./scripts/dev-deploy.sh auth us-west-2  # specific region
+```
+
+### Cut traffic to hotfix
+
+```bash
+./scripts/hotfix-swap.sh activate
+```
+
+API Gateway now routes `https://api.mendicant.io` to the hotfix Lambda. Prod Lambda is untouched.
+
+### Restore prod
+
+If the hotfix didn't work, restore via script:
+
+```bash
+./scripts/hotfix-swap.sh deactivate
+```
+
+Or let Terraform fix the drift on the next apply — it will correct the integrations back to prod as part of any `terraform apply` on `infrastructure/app`.
+
+### Promote a working hotfix to prod
+
+Push to `main` → CI builds the ECR image → deploy the new SHA. This both ships the fix and restores the API Gateway integrations to the ECR-based Lambda in one step:
+
+```bash
+git push
+# wait for CI to complete, note the sha-<sha> tag printed in the build summary
+cd infrastructure/app
+terraform apply -var="image_tag=sha-<sha>"
+```
 
 ## Environment Variables (Lambda)
 
@@ -249,3 +305,21 @@ Run `cargo run -p bootstrap -- <email>` → copy the printed URL → open it in 
 
 **Admin dashboard:**
 `GET /admin` — table overview (item counts, size, billing mode). `GET /admin/tables/{slug}` — paginated contents with domain-aware columns. Both require `Administrator` role; non-admin requests return 403.
+
+## Future Work
+
+### Automated deploy + canary rollback (GitHub Actions)
+
+Currently the `terraform apply` after a successful build is a manual step. The goal is to automate this as an additional Actions job while keeping it on-demand (no always-on infrastructure like Atlantis).
+
+**Approach:** extend the existing `build.yml` workflow with a `deploy` job that runs after `push` succeeds:
+1. Check out the repo and configure AWS credentials via the existing OIDC role
+2. Run `terraform apply -var="image_tag=sha-${{ github.sha }}"` in `infrastructure/app`
+3. After apply, run a canary check: poll Lambda error metrics from CloudWatch for ~5 minutes and compare error rate against the previous deployment window
+4. If error rate is elevated, automatically run `terraform apply -var="image_tag=<previous-sha>"` to roll back
+
+**Why GitHub Actions over Atlantis:** Actions jobs are triggered on-demand by push events and included in the GitHub subscription — no always-running compute cost. Atlantis requires a persistent server listening for webhooks, which adds cost and operational overhead for a single-developer project.
+
+**Terraform state:** automated apply requires shared remote state (currently a TODO — local state only). An S3 backend with a DynamoDB lock table is the prerequisite before this can work in CI. The backend config is already stubbed in each `main.tf`.
+
+**Metrics to watch:** Lambda `Errors` and `Throttles` from CloudWatch, plus API Gateway `5XXError` count. A simple threshold (e.g. error rate > 1% over 5 minutes post-deploy) would trigger the rollback. CloudWatch Contributor Insights or a simple `aws cloudwatch get-metric-statistics` call in the workflow is sufficient — no third-party monitoring required.

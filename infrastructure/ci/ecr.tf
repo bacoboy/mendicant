@@ -17,7 +17,7 @@ locals {
       },
       {
         rulePriority = 2
-        description  = "Keep last 10 tagged images"
+        description  = "Keep last 10 release images"
         selection = {
           tagStatus     = "tagged"
           tagPrefixList = ["sha-"]

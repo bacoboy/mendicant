@@ -35,9 +35,10 @@ data "aws_ecr_repository" "users_lambda" {
 }
 
 locals {
-  api_gw_id = one(data.aws_apigatewayv2_apis.main.ids)
-  ecr_auth  = data.aws_ecr_repository.auth_lambda.repository_url
-  ecr_users = data.aws_ecr_repository.users_lambda.repository_url
+  api_gw_id     = one(data.aws_apigatewayv2_apis.main.ids)
+  exec_role_arn = data.aws_iam_role.lambda_exec.arn
+  ecr_auth      = data.aws_ecr_repository.auth_lambda.repository_url
+  ecr_users     = data.aws_ecr_repository.users_lambda.repository_url
 
   lambda_env = {
     TABLE_USERS                = "${local.prefix}-users"
