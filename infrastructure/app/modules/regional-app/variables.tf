@@ -16,8 +16,8 @@ variable "rp_id" {
   type        = string
 }
 
-variable "rp_origin" {
-  description = "WebAuthn Relying Party origin (e.g. https://api.mendicant.io)."
+variable "rp_origins" {
+  description = "Comma-separated list of allowed WebAuthn origins (e.g. \"https://api.mendicant.io,https://beta.mendicant.io\")."
   type        = string
 }
 

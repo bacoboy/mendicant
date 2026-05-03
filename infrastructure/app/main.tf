@@ -42,7 +42,7 @@ module "app_us_east_2" {
   environment = local.environment
   image_tag   = var.image_tag
   rp_id       = local.domain_name
-  rp_origin   = "https://api.${local.domain_name}"
+  rp_origins  = "https://api.${local.domain_name},https://beta.${local.domain_name}"
   base_url    = "https://api.${local.domain_name}"
 }
 
@@ -57,6 +57,6 @@ module "app_us_west_2" {
   environment = local.environment
   image_tag   = var.image_tag
   rp_id       = local.domain_name
-  rp_origin   = "https://api.${local.domain_name}"
+  rp_origins  = "https://api.${local.domain_name},https://beta.${local.domain_name}"
   base_url    = "https://api.${local.domain_name}"
 }

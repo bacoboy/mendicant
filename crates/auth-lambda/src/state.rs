@@ -3,6 +3,7 @@ use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::Client;
 use db::client::DynamoClient;
 use jsonwebtoken::DecodingKey;
+use std::collections::HashMap;
 use webauthn_rs::prelude::{Url, Webauthn, WebauthnBuilder};
 
 use crate::signing::Signer;
@@ -12,7 +13,9 @@ use crate::signing::Signer;
 pub struct AppState {
     pub db: DynamoClient,
     pub signer: Signer,
-    pub webauthn: Webauthn,
+    /// One Webauthn instance per allowed origin. WebAuthn origin validation is
+    /// per-instance, so multi-origin support requires a map keyed by origin string.
+    webauthn_map: HashMap<String, Webauthn>,
     /// Pre-computed RS256 decoding key so JWT verification is I/O-free
     /// on the request path.
     pub decoding_key: DecodingKey,
@@ -39,16 +42,31 @@ impl AppState {
         let decoding_key = signer.decoding_key().await?;
 
         let rp_id = std::env::var("RP_ID").unwrap_or_else(|_| "localhost".into());
-        let rp_origin = std::env::var("RP_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:9000".into());
-        let rp_origin_url = Url::parse(&rp_origin)
-            .with_context(|| format!("invalid RP_ORIGIN: {rp_origin}"))?;
-        let webauthn = WebauthnBuilder::new(&rp_id, &rp_origin_url)
-            .context("failed to build Webauthn instance")?
-            .rp_name("Mendicant")
-            .build()
-            .context("failed to finalise Webauthn instance")?;
 
-        Ok(Self { db, signer, webauthn, decoding_key })
+        // RP_ORIGINS is a comma-separated list (e.g. "https://api.mendicant.io,https://beta.mendicant.io").
+        // Falls back to RP_ORIGIN for local dev compatibility.
+        let origins_raw = std::env::var("RP_ORIGINS")
+            .or_else(|_| std::env::var("RP_ORIGIN"))
+            .unwrap_or_else(|_| "http://localhost:9000".into());
+
+        let mut webauthn_map = HashMap::new();
+        for origin in origins_raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            let url = Url::parse(origin)
+                .with_context(|| format!("invalid origin in RP_ORIGINS: {origin}"))?;
+            let wa = WebauthnBuilder::new(&rp_id, &url)
+                .context("failed to build Webauthn instance")?
+                .rp_name("Mendicant")
+                .build()
+                .context("failed to finalise Webauthn instance")?;
+            webauthn_map.insert(origin.to_string(), wa);
+        }
+
+        Ok(Self { db, signer, webauthn_map, decoding_key })
+    }
+
+    /// Returns the Webauthn instance for the given request origin, or None if
+    /// the origin is not in the allowed list.
+    pub fn webauthn_for_origin(&self, origin: &str) -> Option<&Webauthn> {
+        self.webauthn_map.get(origin)
     }
 }

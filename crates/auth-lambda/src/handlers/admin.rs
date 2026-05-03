@@ -537,8 +537,12 @@ struct AdminEnrollChallengeState {
 /// 4. Returns SSE signals containing challengeId + registerOptions.
 async fn enroll_begin(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     axum::Json(req): axum::Json<EnrollBeginRequest>,
 ) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
     let challenges_repo = ChallengeRepository::new(state.db.clone());
 
     // Atomically consume the enrollment token — prevents replay.
@@ -575,8 +579,7 @@ async fn enroll_begin(
     // No excludeCredentials for admin enrollment — re-enrolling the same key must
     // work (bootstrap re-runs, adding a second key). Passing existing credential IDs
     // causes InvalidStateError when the key recognises itself in the exclude list.
-    let (ccr, reg_state) = state
-        .webauthn
+    let (ccr, reg_state) = webauthn
         .start_securitykey_registration(
             user_uuid,
             &user.email,
@@ -656,8 +659,13 @@ struct EnrollCompleteRequest {
 /// 4. Stores the credential and issues a JWT + sets the auth cookie.
 async fn enroll_complete(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     axum::Json(req): axum::Json<EnrollCompleteRequest>,
 ) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
     let challenge = ChallengeRepository::new(state.db.clone())
         .take(&req.challenge_id)
         .await
@@ -666,8 +674,7 @@ async fn enroll_complete(
     let bundled: AdminEnrollChallengeState = serde_json::from_str(&challenge.state_json)
         .context("failed to deserialize enroll challenge state")?;
 
-    let passkey = state
-        .webauthn
+    let passkey = webauthn
         .finish_securitykey_registration(&req.response, &bundled.state)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 

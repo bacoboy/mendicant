@@ -47,9 +47,9 @@ locals {
     TABLE_CHALLENGES           = "${local.prefix}-challenges"
     TABLE_EMAIL_TOKENS         = "${local.prefix}-email-tokens"
     TABLE_OAUTH_DEVICES        = "${local.prefix}-oauth-devices"
-    KMS_KEY_ARN                = "arn:aws:kms:${local.region}:${data.aws_caller_identity.current.account_id}:alias/${local.prefix}-jwt-signing"
+    KMS_SIGNING_KEY_ID         = "arn:aws:kms:${local.region}:${data.aws_caller_identity.current.account_id}:alias/${local.prefix}-jwt-signing"
     RP_ID                      = var.rp_id
-    RP_ORIGIN                  = var.rp_origin
+    RP_ORIGINS                 = var.rp_origins
     BASE_URL                   = var.base_url
     ENVIRONMENT                = var.environment
     AWS_USE_DUALSTACK_ENDPOINT = "true"

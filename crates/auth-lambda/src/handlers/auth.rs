@@ -121,8 +121,13 @@ struct RegChallengeState {
 /// Requires a valid email token from the email validation step and a display name.
 async fn register_begin(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<RegisterBeginRequest>,
 ) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
     // Look up and consume the email token
     let email_token = EmailTokenRepository::new(state.db.clone())
         .take(&req.token)
@@ -143,8 +148,7 @@ async fn register_begin(
     let user_uuid = uuid::Uuid::new_v4();
     let exclude = existing_cred_ids(&state, &email).await;
 
-    let (ccr, reg_state) = state
-        .webauthn
+    let (ccr, reg_state) = webauthn
         .start_passkey_registration(user_uuid, &email, &display_name, exclude)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
@@ -191,8 +195,13 @@ async fn register_begin(
 /// creates the user if needed, and issues tokens.
 async fn register_complete(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<RegisterCompleteRequest>,
 ) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
     let challenge = ChallengeRepository::new(state.db.clone())
         .take(&req.challenge_id)
         .await
@@ -201,8 +210,7 @@ async fn register_complete(
     let bundled: RegChallengeState = serde_json::from_str(&challenge.state_json)
         .context("failed to deserialize registration state")?;
 
-    let passkey = state
-        .webauthn
+    let passkey = webauthn
         .finish_passkey_registration(&req.response, &bundled.state)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
@@ -277,13 +285,17 @@ struct AuthChallengeState {
 /// passkeys registered for the domain.
 async fn login_begin(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
 ) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
     // Discovery mode: empty passkey list lets the authenticator show all passkeys
     // for this domain without requiring the user to enter an email first.
     let passkeys = vec![];
 
-    let (rcr, auth_state) = state
-        .webauthn
+    let (rcr, auth_state) = webauthn
         .start_passkey_authentication(&passkeys)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
@@ -456,8 +468,13 @@ async fn login_complete(
 /// POST /auth/passkey/add/begin — start a WebAuthn registration for an existing user
 async fn add_passkey_begin(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     AuthUser(claims): AuthUser,
 ) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
     let user_id = uuid::Uuid::parse_str(&claims.sub)
         .map_err(|_| AppError::BadRequest("invalid user ID in token".into()))?;
 
@@ -479,8 +496,7 @@ async fn add_passkey_begin(
             if ids.is_empty() { None } else { Some(ids) }
         });
 
-    let (ccr, reg_state) = state
-        .webauthn
+    let (ccr, reg_state) = webauthn
         .start_passkey_registration(user_id, &claims.email, &claims.email, exclude)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
@@ -529,9 +545,14 @@ struct AddPasskeyCompleteRequest {
 /// POST /auth/passkey/add/complete — complete passkey registration for authenticated user
 async fn add_passkey_complete(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     AuthUser(claims): AuthUser,
     Json(req): Json<AddPasskeyCompleteRequest>,
 ) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
     let user_id = uuid::Uuid::parse_str(&claims.sub)
         .map(domain::user::UserId)
         .map_err(|_| AppError::BadRequest("invalid user ID in token".into()))?;
@@ -544,8 +565,7 @@ async fn add_passkey_complete(
     let bundled: RegChallengeState = serde_json::from_str(&challenge.state_json)
         .context("failed to deserialize registration state")?;
 
-    let passkey = state
-        .webauthn
+    let passkey = webauthn
         .finish_passkey_registration(&req.response, &bundled.state)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
