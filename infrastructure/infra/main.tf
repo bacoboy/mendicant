@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.9.0"
+  required_version = ">= 1.15"
 
   required_providers {
     aws = {
@@ -96,8 +96,11 @@ resource "aws_dynamodb_table" "users" {
 
   global_secondary_index {
     name            = "email-index"
-    hash_key        = "email"
     projection_type = "ALL"
+    key_schema {
+      attribute_name = "email"
+      key_type       = "HASH"
+    }
   }
 
   replica { region_name = "us-west-2" }
@@ -136,8 +139,11 @@ resource "aws_dynamodb_table" "credentials" {
 
   global_secondary_index {
     name            = "credential-id-index"
-    hash_key        = "credential_id"
     projection_type = "ALL"
+    key_schema {
+      attribute_name = "credential_id"
+      key_type       = "HASH"
+    }
   }
 
   replica { region_name = "us-west-2" }
@@ -175,8 +181,11 @@ resource "aws_dynamodb_table" "refresh_tokens" {
 
   global_secondary_index {
     name            = "user-index"
-    hash_key        = "user_id"
     projection_type = "ALL"
+    key_schema {
+      attribute_name = "user_id"
+      key_type       = "HASH"
+    }
   }
 
   replica { region_name = "us-west-2" }

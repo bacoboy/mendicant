@@ -29,3 +29,6 @@ override.tf.json
 # Editor
 .idea/
 *.iml
+
+# Claude Code local settings (personal permissions/overrides, not shared)
+**/.claude/settings.local.json

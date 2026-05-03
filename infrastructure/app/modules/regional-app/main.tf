@@ -26,23 +26,31 @@ data "aws_apigatewayv2_apis" "main" {
   protocol_type = "HTTP"
 }
 
-locals {
-  api_gw_id = tolist(data.aws_apigatewayv2_apis.main.ids)[0]
+data "aws_ecr_repository" "auth_lambda" {
+  name = "${local.prefix}-auth-lambda"
+}
 
-  ecr_base = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${local.region}.amazonaws.com"
+data "aws_ecr_repository" "users_lambda" {
+  name = "${local.prefix}-users-lambda"
+}
+
+locals {
+  api_gw_id = one(data.aws_apigatewayv2_apis.main.ids)
+  ecr_auth  = data.aws_ecr_repository.auth_lambda.repository_url
+  ecr_users = data.aws_ecr_repository.users_lambda.repository_url
 
   lambda_env = {
-    TABLE_USERS          = "${local.prefix}-users"
-    TABLE_CREDENTIALS    = "${local.prefix}-credentials"
-    TABLE_REFRESH_TOKENS = "${local.prefix}-refresh-tokens"
-    TABLE_CHALLENGES     = "${local.prefix}-challenges"
-    TABLE_EMAIL_TOKENS   = "${local.prefix}-email-tokens"
-    TABLE_OAUTH_DEVICES  = "${local.prefix}-oauth-devices"
-    KMS_KEY_ARN          = "arn:aws:kms:${local.region}:${data.aws_caller_identity.current.account_id}:alias/${local.prefix}-jwt-signing"
-    RP_ID                = var.rp_id
-    RP_ORIGIN            = var.rp_origin
-    BASE_URL             = var.base_url
-    ENVIRONMENT          = var.environment
+    TABLE_USERS                = "${local.prefix}-users"
+    TABLE_CREDENTIALS          = "${local.prefix}-credentials"
+    TABLE_REFRESH_TOKENS       = "${local.prefix}-refresh-tokens"
+    TABLE_CHALLENGES           = "${local.prefix}-challenges"
+    TABLE_EMAIL_TOKENS         = "${local.prefix}-email-tokens"
+    TABLE_OAUTH_DEVICES        = "${local.prefix}-oauth-devices"
+    KMS_KEY_ARN                = "arn:aws:kms:${local.region}:${data.aws_caller_identity.current.account_id}:alias/${local.prefix}-jwt-signing"
+    RP_ID                      = var.rp_id
+    RP_ORIGIN                  = var.rp_origin
+    BASE_URL                   = var.base_url
+    ENVIRONMENT                = var.environment
     AWS_USE_DUALSTACK_ENDPOINT = "true"
   }
 }

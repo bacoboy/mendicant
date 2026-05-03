@@ -3,8 +3,8 @@ data "aws_availability_zones" "this" {
 }
 
 locals {
-  prefix       = "${var.app_name}-${var.environment}"
-  region       = data.aws_region.current.id
+  prefix = "${var.app_name}-${var.environment}"
+  region = data.aws_region.current.id
   short_region = one(toset([
     for az_id in data.aws_availability_zones.this.zone_ids :
     split("-", az_id)[0]
@@ -88,8 +88,11 @@ resource "aws_dynamodb_table" "oauth_devices" {
 
   global_secondary_index {
     name            = "user-code-index"
-    hash_key        = "user_code"
     projection_type = "ALL"
+    key_schema {
+      attribute_name = "user_code"
+      key_type       = "HASH"
+    }
   }
 
   tags = {

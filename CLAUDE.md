@@ -30,7 +30,10 @@ Each HTTP request becomes one discrete Lambda invocation. Lambda REPORT lines ap
 # 1. Start everything (builds Lambda container, starts DynamoDB, proxy, Caddy)
 docker compose up -d
 
-# 2. Access the site
+# 2. Create DynamoDB tables (required after every fresh start — DynamoDB is in-memory)
+./scripts/setup-dynamodb-local.sh
+
+# 3. Access the site
 open https://localhost:9001   # accept the browser cert warning (or: docker compose exec caddy caddy trust)
 ```
 
@@ -62,6 +65,27 @@ When these are absent the code uses real AWS services.
 - `localhost:3000` — local-apigw proxy (internal, no need to access directly)
 - `localhost:9000` — Caddy HTTP (for dev testing without HTTPS)
 - `localhost:9001` — Caddy HTTPS (required for Safari WebAuthn)
+
+**Certificate expired (returning after a long break):**
+
+Caddy's locally-issued HTTPS cert expires if the stack was stopped for a while. To regenerate and re-trust:
+```bash
+docker compose down
+docker volume rm mendicant_caddy_data mendicant_caddy_config
+docker compose up -d
+# caddy trust won't work (admin off in Caddyfile) — install the CA cert directly:
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
+
+# Safari / Chrome (uses macOS keychain):
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./caddy-root.crt
+
+# Firefox (has its own cert store — macOS keychain is ignored):
+# Settings → Privacy & Security → View Certificates → Authorities → Import
+# Select caddy-root.crt, tick "Trust this CA to identify websites", OK.
+
+rm ./caddy-root.crt
+```
+DynamoDB is in-memory so no data is lost. After trusting the cert, reload the browser.
 
 ## Terraform
 
