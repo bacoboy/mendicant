@@ -6,6 +6,7 @@ on:
 
 env:
   AWS_ACCOUNT_ID: "054297229654"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ── Build ──────────────────────────────────────────────────────────────────
