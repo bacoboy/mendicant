@@ -6,7 +6,6 @@ on:
 
 env:
   AWS_ACCOUNT_ID: "054297229654"
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ── Build ──────────────────────────────────────────────────────────────────
@@ -15,13 +14,13 @@ jobs:
   build:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build auth-lambda
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: crates/auth-lambda/Dockerfile
@@ -33,7 +32,7 @@ jobs:
           cache-to: type=gha,scope=auth-lambda,mode=max
 
       - name: Build users-lambda
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: crates/users-lambda/Dockerfile
@@ -45,7 +44,7 @@ jobs:
           cache-to: type=gha,scope=users-lambda,mode=max
 
       - name: Upload image artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: lambda-images-${{ github.sha }}
           path: /tmp/*.tar
@@ -68,7 +67,7 @@ jobs:
 
     steps:
       - name: Download image artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           name: lambda-images-${{ github.sha }}
           path: /tmp
