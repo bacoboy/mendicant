@@ -101,9 +101,19 @@ async fn register_email(
             )
         })?;
 
-    // TODO: Send email via AWS SES with link: /register-confirm?token={token_id}
-    // For now, return token in response for testing
-    tracing::info!("email validation token created for {}: {}", req.email, token_id);
+    let verification_url = format!("{}/register-confirm?token={}", state.base_url, token_id);
+    state.mailer
+        .send_verification(&req.email, &verification_url)
+        .await
+        .map_err(|e| {
+            tracing::error!("failed to send verification email to {}: {e:#}", req.email);
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to send verification email. Please try again.".into(),
+                }),
+            )
+        })?;
 
     Ok(Json(RegisterEmailResponse {
         token: token_id,

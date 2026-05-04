@@ -31,6 +31,7 @@ data "aws_iam_policy_document" "lambda_dynamodb" {
       "dynamodb:DeleteItem",
       "dynamodb:Query",
       "dynamodb:Scan",
+      "dynamodb:DescribeTable",
     ]
     resources = [
       "arn:aws:dynamodb:${local.region}:*:table/${var.users_table_name}",
@@ -67,4 +68,23 @@ resource "aws_iam_role_policy" "lambda_kms" {
   name   = "kms-signing"
   role   = aws_iam_role.lambda_exec.id
   policy = data.aws_iam_policy_document.lambda_kms.json
+}
+
+data "aws_iam_policy_document" "lambda_ses" {
+  statement {
+    effect  = "Allow"
+    actions = ["ses:SendEmail"]
+    resources = [
+      var.ses_identity_arn,
+      # Individual sandbox-verified addresses are separate SES identity resources.
+      # The wildcard covers all of them without enumerating each one.
+      "arn:aws:ses:us-east-2:*:identity/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "lambda_ses" {
+  name   = "ses-send"
+  role   = aws_iam_role.lambda_exec.id
+  policy = data.aws_iam_policy_document.lambda_ses.json
 }

@@ -57,5 +57,7 @@ locals {
     ENVIRONMENT                = var.environment
     AWS_USE_DUALSTACK_ENDPOINT = "true"
     INVITE_CODE                = local.invite_code
+    SES_FROM_ADDRESS           = "noreply@${var.domain_name}"
+    SES_REGION                 = "us-east-2"
   }
 }

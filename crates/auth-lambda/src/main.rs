@@ -4,6 +4,7 @@ use lambda_http::{Error, run, tracing as lambda_tracing};
 mod error;
 mod handlers;
 mod jwt;
+mod mailer;
 mod middleware;
 mod signing;
 mod sse;

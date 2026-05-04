@@ -217,6 +217,7 @@ module "regional_us_east_2" {
   refresh_tokens_table_name = aws_dynamodb_table.refresh_tokens.name
   domain_name               = local.domain_name
   route53_zone_id           = data.aws_route53_zone.main.zone_id
+  ses_identity_arn          = aws_sesv2_email_identity.domain.arn
 }
 
 module "regional_us_west_2" {
@@ -236,4 +237,5 @@ module "regional_us_west_2" {
   refresh_tokens_table_name = aws_dynamodb_table.refresh_tokens.name
   domain_name               = local.domain_name
   route53_zone_id           = data.aws_route53_zone.main.zone_id
+  ses_identity_arn          = aws_sesv2_email_identity.domain.arn
 }

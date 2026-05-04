@@ -36,3 +36,8 @@ variable "domain_name" {
 variable "route53_zone_id" {
   type = string
 }
+
+variable "ses_identity_arn" {
+  description = "ARN of the SES domain identity in us-east-2. Used to scope the Lambda send permission."
+  type        = string
+}

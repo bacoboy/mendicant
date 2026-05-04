@@ -32,6 +32,7 @@ time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 aws-config = "1"
 aws-sdk-dynamodb = "1"
 aws-sdk-kms = "1"
+aws-sdk-sesv2 = "1"
 base64 = "0.22"
 
 # lambda + http

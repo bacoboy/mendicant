@@ -44,6 +44,7 @@ module "app_us_east_2" {
   rp_id       = local.domain_name
   rp_origins  = "https://api.${local.domain_name},https://beta.${local.domain_name}"
   base_url    = "https://api.${local.domain_name}"
+  domain_name = local.domain_name
 }
 
 module "app_us_west_2" {
@@ -59,4 +60,5 @@ module "app_us_west_2" {
   rp_id       = local.domain_name
   rp_origins  = "https://api.${local.domain_name},https://beta.${local.domain_name}"
   base_url    = "https://api.${local.domain_name}"
+  domain_name = local.domain_name
 }

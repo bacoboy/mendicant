@@ -25,3 +25,8 @@ variable "base_url" {
   description = "Base URL for constructing links in emails and OAuth redirects."
   type        = string
 }
+
+variable "domain_name" {
+  description = "Root domain name (e.g. mendicant.io). Used to derive SES from address."
+  type        = string
+}
