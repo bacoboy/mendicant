@@ -33,7 +33,6 @@
       "Bash(aws dynamodb put-item:*)",
       "Bash(aws dynamodb describe-time-to-live:*)",
       "Bash(aws dynamodb update-time-to-live:*)",
-      "Bash(curl --insecure -s -X POST https://localhost:9001/*",
       "Bash(pkill -f \"docker compose logs\")",
       "Bash(curl --insecure -s https://localhost:9001/)",
       "Bash(docker image ls:*)",
@@ -56,7 +55,13 @@
       "Bash(aws route53:*)",
       "WebFetch(domain:docs.yubico.com)",
       "WebFetch(domain:support.yubico.com)",
-      "Bash(./target/debug/bootstrap admin@mendicant.dev)"
+      "Bash(./target/debug/bootstrap admin@mendicant.dev)",
+      "Bash(aws dynamodb *)",
+      "Bash(aws logs *)",
+      "Bash(aws sesv2 *)",
+      "Bash(gh release *)",
+      "Bash(git -C /Users/steve/workspace/mendicant status)",
+      "Bash(git -C /Users/steve/workspace/mendicant diff HEAD --stat)"
     ]
   }
 }

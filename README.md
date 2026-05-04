@@ -306,6 +306,35 @@ Run `cargo run -p bootstrap -- <email>` → copy the printed URL → open it in 
 **Admin dashboard:**
 `GET /admin` — table overview (item counts, size, billing mode). `GET /admin/tables/{slug}` — paginated contents with domain-aware columns. Both require `Administrator` role; non-admin requests return 403.
 
+## Working with Claude Code
+
+Context is split into subdirectory `CLAUDE.md` files so each session only loads what's relevant:
+
+| File | Loaded when... |
+|---|---|
+| `CLAUDE.md` | Always — project overview, stack, quick commands |
+| `crates/CLAUDE.md` | Working on any crate — DynamoDB schema, JWT signing, multi-region rules |
+| `crates/auth-lambda/CLAUDE.md` | Working on auth — flows, WebAuthn quirks, endpoints |
+| `infrastructure/CLAUDE.md` | Working on infra — Terraform layout, rules, CI/CD |
+
+**Before starting a session**, read the relevant docs so Claude has current context:
+
+```bash
+# Where things stand and what's left to do
+cat docs/progress.md
+
+# Upcoming features and design decisions
+cat docs/future-work.md
+```
+
+You can paste the contents of either file into the chat, or just tell Claude to read it:
+> "Read docs/progress.md and continue from where we left off."
+
+**Troubleshooting the local dev environment** (certificate expiry, port conflicts):
+```bash
+cat docs/local-dev.md
+```
+
 ## Future Work
 
 ### Automated deploy + canary rollback (GitHub Actions)
