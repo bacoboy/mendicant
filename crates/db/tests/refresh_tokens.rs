@@ -3,10 +3,10 @@ mod common;
 use db::error::DbError;
 use db::refresh_tokens::RefreshTokenRepository;
 use domain::token::RefreshToken;
-use domain::user::{Role, UserId};
+use domain::user::UserId;
 
 fn token() -> RefreshToken {
-    RefreshToken::new(UserId::new(), Role::Free, 9999999999)
+    RefreshToken::new(UserId::new(), 9999999999)
 }
 
 #[tokio::test]
@@ -20,7 +20,6 @@ async fn put_and_get() {
 
     assert_eq!(fetched.jti, t.jti);
     assert_eq!(fetched.user_id, t.user_id);
-    assert_eq!(fetched.role, Role::Free);
     assert!(!fetched.revoked);
 }
 

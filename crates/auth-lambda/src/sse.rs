@@ -9,12 +9,12 @@ use axum::response::IntoResponse;
 
 pub struct SseResponse {
     events: Vec<String>,
-    cookie: Option<String>,
+    cookies: Vec<String>,
 }
 
 impl SseResponse {
     pub fn new() -> Self {
-        Self { events: vec![], cookie: None }
+        Self { events: vec![], cookies: vec![] }
     }
 
     /// Merge values into the Datastar signals store on the client.
@@ -47,15 +47,43 @@ impl SseResponse {
         self.execute_script(&format!("window.location.href='{url}'"))
     }
 
-    /// Attach an `HttpOnly` JWT cookie that the browser will include on all
-    /// subsequent requests. The SSE response headers are the delivery mechanism.
+    /// Attach an `HttpOnly` JWT access token cookie plus a readable `auth_exp`
+    /// cookie (Unix timestamp) that client-side JS uses to schedule silent refresh.
     pub fn with_auth_cookie(mut self, token: &str, secure: bool) -> Self {
         let secure_flag = if secure { "; Secure" } else { "" };
-        self.cookie = Some(format!(
+        let exp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() + 900;
+        self.cookies.push(format!(
             "auth={token}; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age=900"
+        ));
+        self.cookies.push(format!(
+            "auth_exp={exp}; SameSite=Strict; Path=/; Max-Age=900"
         ));
         self
     }
+
+    /// Attach an `HttpOnly` refresh token cookie (30-day lifetime).
+    pub fn with_refresh_cookie(mut self, jti: &str, secure: bool) -> Self {
+        let secure_flag = if secure { "; Secure" } else { "" };
+        self.cookies.push(format!(
+            "refresh_token={jti}; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age=2592000"
+        ));
+        self
+    }
+}
+
+/// Build a plain 200 response that only sets cookies (no SSE body).
+/// Use this for endpoints called via `fetch()` where no DOM patching is needed.
+pub fn cookie_only_response(cookies: Vec<String>) -> axum::response::Response {
+    let mut builder = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_LENGTH, "0");
+    for cookie in cookies {
+        builder = builder.header(header::SET_COOKIE, cookie);
+    }
+    builder.body(Body::empty()).unwrap()
 }
 
 impl Default for SseResponse {
@@ -73,7 +101,7 @@ impl IntoResponse for SseResponse {
             .header(header::CACHE_CONTROL, "no-cache")
             .header("X-Accel-Buffering", "no"); // tell nginx not to buffer SSE
 
-        if let Some(cookie) = self.cookie {
+        for cookie in self.cookies {
             builder = builder.header(header::SET_COOKIE, cookie);
         }
 

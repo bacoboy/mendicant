@@ -217,6 +217,9 @@ button:disabled, .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .topnav-links a { color: var(--subtext1); text-decoration: none; }
 .topnav-links a:hover { color: var(--text); text-decoration: none; }
 
+.topnav-user { color: var(--teal) !important; }
+.topnav-user:hover { color: var(--sky) !important; }
+
 .topnav-logout {
   background: none;
   border: none;

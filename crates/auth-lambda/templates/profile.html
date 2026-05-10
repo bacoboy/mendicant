@@ -2,11 +2,11 @@
 
 {% block title %}profile – mendicant{% endblock %}
 
-{% block page_class %}{% endblock %}
+{% block page_class %}page-wide{% endblock %}
 
 {% block nav_right %}
   {% if nav.is_admin %}<a href="/admin">admin</a>{% endif %}
-  <a href="/me">{{ nav.email }}</a>
+  <a href="/me" class="topnav-user">{{ nav.email }}</a>
   <form method="POST" action="/logout" style="display:contents;">
     <button type="submit" class="topnav-logout">logout</button>
   </form>
@@ -60,11 +60,13 @@
     <tr data-cred-id="{{ cred.id }}">
       <td>
         <div class="passkey-nickname">{{ cred.nickname }}</div>
-        <div class="passkey-edit" hidden style="display:flex;gap:0.4rem;align-items:center;">
+        <div class="passkey-edit" hidden style="display:flex;flex-direction:column;gap:0.4rem;">
           <input type="text" class="passkey-input" value="{{ cred.nickname }}"
-                 maxlength="64" style="margin-bottom:0;flex:1;min-width:0;">
-          <button class="btn btn-secondary btn-sm" onclick="saveNickname(this)">save</button>
-          <button class="btn btn-secondary btn-sm" onclick="cancelEdit(this)">cancel</button>
+                 maxlength="64" style="margin-bottom:0;">
+          <div style="display:flex;gap:0.4rem;">
+            <button class="btn btn-secondary btn-sm" onclick="saveNickname(this)">save</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelEdit(this)">cancel</button>
+          </div>
         </div>
       </td>
       <td class="muted">{{ cred.created_at }}</td>

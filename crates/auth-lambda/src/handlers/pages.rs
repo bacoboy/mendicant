@@ -167,17 +167,19 @@ fn fmt_dt(dt: OffsetDateTime) -> String {
     )
 }
 
-/// POST /logout — clear the auth cookie and redirect to login
+/// POST /logout — clear all auth cookies and redirect to login
 async fn logout(
     AuthUser(_claims): AuthUser,
 ) -> impl IntoResponse {
     let mut response = Redirect::to("/").into_response();
     let headers = response.headers_mut();
-    // Clear the auth cookie by setting it to empty with an expired date
-    headers.insert(
-        header::SET_COOKIE,
-        "auth=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict".parse().unwrap(),
-    );
+    for cookie in [
+        "auth=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict",
+        "auth_exp=; Max-Age=0; Path=/; SameSite=Strict",
+        "refresh_token=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict",
+    ] {
+        headers.append(header::SET_COOKIE, cookie.parse().unwrap());
+    }
     response
 }
 

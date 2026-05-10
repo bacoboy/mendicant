@@ -204,7 +204,7 @@ async fn table_page(
         "refresh-tokens" => (
             &state.db.refresh_tokens_table,
             "Global",
-            vec!["JTI", "User ID", "Role", "Expires", "Revoked"],
+            vec!["JTI", "User ID", "Expires", "Revoked"],
         ),
         "challenges" => (
             &state.db.challenges_table,
@@ -419,7 +419,6 @@ fn row_refresh_token(item: &DdbItem) -> Vec<String> {
     vec![
         trunc(&jti, 8),
         trunc(&user_id, 8),
-        title_case(&val_s(item, "role")),
         fmt_unix(&expires_n),
         val_bool(item, "revoked"),
     ]
@@ -743,6 +742,7 @@ async fn enroll_complete(
     let secure = is_secure_context();
     Ok(SseResponse::new()
         .with_auth_cookie(&tokens.access_token, secure)
+        .with_refresh_cookie(&tokens.refresh_token_jti, secure)
         .redirect("/me"))
 }
 

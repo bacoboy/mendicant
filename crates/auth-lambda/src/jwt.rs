@@ -42,7 +42,6 @@ pub async fn issue_tokens(
 
     let refresh = RefreshToken::new(
         user_id.clone(),
-        role.clone(),
         now + REFRESH_TOKEN_LIFETIME_SECS,
     );
 

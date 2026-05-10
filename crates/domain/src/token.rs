@@ -24,18 +24,16 @@ pub struct RefreshToken {
     /// The JWT ID this refresh token is bound to.
     pub jti: String,
     pub user_id: UserId,
-    pub role: Role,
     /// Unix timestamp when this token expires (also the DynamoDB TTL value).
     pub expires_at: i64,
     pub revoked: bool,
 }
 
 impl RefreshToken {
-    pub fn new(user_id: UserId, role: Role, expires_at: i64) -> Self {
+    pub fn new(user_id: UserId, expires_at: i64) -> Self {
         Self {
             jti: Uuid::new_v4().to_string(),
             user_id,
-            role,
             expires_at,
             revoked: false,
         }
@@ -49,18 +47,17 @@ mod tests {
     #[test]
     fn refresh_token_new_not_revoked() {
         let uid = UserId::new();
-        let t = RefreshToken::new(uid.clone(), Role::Free, 9999999999);
+        let t = RefreshToken::new(uid.clone(), 9999999999);
         assert!(!t.revoked);
         assert_eq!(t.user_id, uid);
-        assert_eq!(t.role, Role::Free);
         assert_eq!(t.expires_at, 9999999999);
     }
 
     #[test]
     fn refresh_token_jti_is_unique() {
         let uid = UserId::new();
-        let a = RefreshToken::new(uid.clone(), Role::Free, 0);
-        let b = RefreshToken::new(uid, Role::Free, 0);
+        let a = RefreshToken::new(uid.clone(), 0);
+        let b = RefreshToken::new(uid, 0);
         assert_ne!(a.jti, b.jti);
     }
 }

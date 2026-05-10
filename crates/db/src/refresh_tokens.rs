@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use domain::token::RefreshToken;
-use domain::user::{Role, UserId};
+use domain::user::UserId;
 
 use crate::attr::{Item, get_bool, get_n_i64, get_s};
 use crate::client::DynamoClient;
@@ -22,7 +22,6 @@ fn token_to_item(t: &RefreshToken) -> Item {
     m.insert("pk".into(), pk(&t.jti));
     m.insert("jti".into(), AttributeValue::S(t.jti.clone()));
     m.insert("user_id".into(), AttributeValue::S(t.user_id.to_string()));
-    m.insert("role".into(), AttributeValue::S(role_to_str(&t.role).into()));
     m.insert("expires_at".into(), AttributeValue::N(t.expires_at.to_string()));
     m.insert("revoked".into(), AttributeValue::Bool(t.revoked));
     m
@@ -35,27 +34,9 @@ fn item_to_token(item: Item) -> Result<RefreshToken, DbError> {
             Uuid::parse_str(&get_s(&item, "user_id")?)
                 .map_err(|e| DbError::Serde(e.to_string()))?,
         ),
-        role: str_to_role(&get_s(&item, "role")?)?,
         expires_at: get_n_i64(&item, "expires_at")?,
         revoked: get_bool(&item, "revoked")?,
     })
-}
-
-fn role_to_str(role: &Role) -> &'static str {
-    match role {
-        Role::Free => "free",
-        Role::Member => "member",
-        Role::Administrator => "administrator",
-    }
-}
-
-fn str_to_role(s: &str) -> Result<Role, DbError> {
-    match s {
-        "free" => Ok(Role::Free),
-        "member" => Ok(Role::Member),
-        "administrator" => Ok(Role::Administrator),
-        other => Err(DbError::Serde(format!("unknown role: {other}"))),
-    }
 }
 
 // ── Repository ────────────────────────────────────────────────────────────────

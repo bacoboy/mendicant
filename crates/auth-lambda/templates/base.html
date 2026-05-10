@@ -24,5 +24,32 @@
     {% block content %}{% endblock %}
   </main>
   {% block scripts %}{% endblock %}
+  <script>
+    (function () {
+      function cookieVal(name) {
+        const prefix = name + '=';
+        for (const part of document.cookie.split(';')) {
+          const s = part.trim();
+          if (s.startsWith(prefix)) return s.slice(prefix.length);
+        }
+        return null;
+      }
+      function scheduleRefresh() {
+        const exp = parseInt(cookieVal('auth_exp') || '0', 10);
+        if (!exp) return;
+        const msUntilRefresh = (exp - 60) * 1000 - Date.now();
+        if (msUntilRefresh <= 0) { doRefresh(); return; }
+        setTimeout(doRefresh, msUntilRefresh);
+      }
+      async function doRefresh() {
+        try {
+          const resp = await fetch('/auth/refresh', { method: 'POST', credentials: 'same-origin' });
+          if (resp.ok) { scheduleRefresh(); }
+          else { window.location.href = '/'; }
+        } catch (_) {}
+      }
+      scheduleRefresh();
+    })();
+  </script>
 </body>
 </html>

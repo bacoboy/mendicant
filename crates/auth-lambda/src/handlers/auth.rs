@@ -1,6 +1,7 @@
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
+use axum::response::IntoResponse;
 use axum::routing::post;
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,7 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/register/complete", post(register_complete))
         .route("/auth/login/begin", post(login_begin))
         .route("/auth/login/complete", post(login_complete))
+        .route("/auth/refresh", post(token_refresh))
         .route("/auth/passkey/add/begin", post(add_passkey_begin))
         .route("/auth/passkey/add/complete", post(add_passkey_complete))
 }
@@ -285,6 +287,7 @@ async fn register_complete(
     let secure = is_secure_context();
     Ok(SseResponse::new()
         .with_auth_cookie(&tokens.access_token, secure)
+        .with_refresh_cookie(&tokens.refresh_token_jti, secure)
         .redirect("/me"))
 }
 
@@ -481,6 +484,7 @@ async fn login_complete(
     let secure = is_secure_context();
     Ok(SseResponse::new()
         .with_auth_cookie(&tokens.access_token, secure)
+        .with_refresh_cookie(&tokens.refresh_token_jti, secure)
         .redirect("/me"))
 }
 
@@ -648,4 +652,58 @@ fn is_secure_context() -> bool {
     std::env::var("ENVIRONMENT")
         .map(|e| e != "dev")
         .unwrap_or(true)
+}
+
+// ── Token Refresh ─────────────────────────────────────────────────────────────
+
+/// POST /auth/refresh — exchange a valid refresh token cookie for a new access
+/// token + rotated refresh token. The old refresh token is revoked on use.
+async fn token_refresh(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
+    let jti = extract_refresh_jti(&headers).ok_or(AppError::Unauthorized)?;
+
+    let refresh_repo = RefreshTokenRepository::new(state.db.clone());
+    let token = refresh_repo.get(&jti).await.map_err(|_| AppError::Unauthorized)?;
+
+    let now = time::OffsetDateTime::now_utc().unix_timestamp();
+    if token.revoked || token.expires_at < now {
+        return Err(AppError::Unauthorized);
+    }
+
+    let user = UserRepository::new(state.db.clone())
+        .get(&token.user_id)
+        .await
+        .map_err(|_| AppError::Unauthorized)?;
+
+    refresh_repo.revoke(&jti).await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+
+    let tokens = issue_tokens(&user.id, &user.role, &user.email, &state.signer, &refresh_repo)
+        .await
+        .map_err(AppError::Internal)?;
+
+    let secure = is_secure_context();
+    let secure_flag = if secure { "; Secure" } else { "" };
+    let exp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() + 900;
+    Ok(crate::sse::cookie_only_response(vec![
+        format!("auth={}; HttpOnly{}; SameSite=Strict; Path=/; Max-Age=900", tokens.access_token, secure_flag),
+        format!("auth_exp={exp}; SameSite=Strict; Path=/; Max-Age=900"),
+        format!("refresh_token={}; HttpOnly{}; SameSite=Strict; Path=/; Max-Age=2592000", tokens.refresh_token_jti, secure_flag),
+    ]))
+}
+
+fn extract_refresh_jti(headers: &axum::http::HeaderMap) -> Option<String> {
+    let cookie_hdr = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
+    for part in cookie_hdr.split(';') {
+        let part = part.trim();
+        if let Some(jti) = part.strip_prefix("refresh_token=") {
+            return Some(jti.to_string());
+        }
+    }
+    None
 }
