@@ -1,6 +1,6 @@
 # Project Progress
 
-Last updated: 2026-05-10 (session 7)
+Last updated: 2026-05-10 (session 8)
 
 ## Current State
 
@@ -76,6 +76,15 @@ Ready for: SES integration and Terraform deployment work.
 - `RefreshTokenRepository::list_for_user` added (queries `user-index` GSI)
 - All logout paths consolidated to `POST /auth/logout` (revokes DB token + clears cookies)
 
+### Session 8 — Admin table browser polish, routing fix (2026-05-10)
+- `UserRepository::list` fully rewritten from `Scan` to `Query` using two GSIs: `sk-email-index` (list-all + email prefix) and `role-index` (role filter ± email prefix); status is always a `FilterExpression` — no table scans
+- `sk-email-index` (pk=`sk`, sk=`email`) and `role-index` (pk=`role`, sk=`email`) added to `infrastructure/infra/main.tf` and `setup-dynamodb-local.sh`
+- Admin raw table browser: removed `users` and `credentials` rows (superseded by proper UI); added clickable user UUID links to `/admin/users/{id}` in remaining tables
+- Dashboard table links: `users` and `credentials` now point to `/admin/users` instead of the removed raw view pages
+- Table browser pagination: shows "page N · ~M total" using `describe_table` estimate; "← page 1" escape when past first page
+- Logout gracefully handles missing/purged refresh tokens (swallows `NotFound` + `ConditionalCheckFailed`)
+- Fixed API GW routing: `GET /admin/users` and `GET+DELETE /admin/users/{id}` were explicitly routed to `users-lambda` in `infrastructure/app`; removed those routes so they fall through to `$default` (auth-lambda)
+
 ### Session 7 — Admin user management, passkey recovery (2026-05-10)
 - Admin sidebar layout added to all admin pages (`page-sidebar` + `admin-layout` / `admin-sidenav` / `admin-content`)
 - `GET /admin/users` — paginated user list with search (email `contains`), role filter, status filter
@@ -101,7 +110,7 @@ Ready for: SES integration and Terraform deployment work.
 
 1. **SES integration** — `POST /auth/register/email` should send email with verification link instead of returning token in response. See `docs/future-work.md`.
 
-2. **users-lambda wiring** — wire `users-lambda` into the local proxy and Terraform so `GET/PATCH /me` is served from the right lambda.
+2. **users-lambda wiring** — `PATCH /me` and `PATCH /admin/users/{id}` are correctly routed to `users-lambda` in API GW. `GET/DELETE /admin/users/*` were fixed (session 8) to fall through to `auth-lambda`. Local docker-compose still routes everything through auth-lambda only.
 
 3. **Terraform: env vars** — Lambda env vars must include `RP_ID`, `RP_ORIGIN`, `BASE_URL` in addition to table names and KMS key ID. Verify Lambda IAM role has `kms:Sign` + `kms:GetPublicKey`.
 
