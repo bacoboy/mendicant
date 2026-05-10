@@ -1,6 +1,6 @@
 # Project Progress
 
-Last updated: 2026-05-10 (session 6)
+Last updated: 2026-05-10 (session 7)
 
 ## Current State
 
@@ -75,6 +75,23 @@ Ready for: SES integration and Terraform deployment work.
 - Label carried forward on token rotation; CLI device flow always stores "CLI"
 - `RefreshTokenRepository::list_for_user` added (queries `user-index` GSI)
 - All logout paths consolidated to `POST /auth/logout` (revokes DB token + clears cookies)
+
+### Session 7 — Admin user management, passkey recovery (2026-05-10)
+- Admin sidebar layout added to all admin pages (`page-sidebar` + `admin-layout` / `admin-sidenav` / `admin-content`)
+- `GET /admin/users` — paginated user list with search (email `contains`), role filter, status filter
+- `GET /admin/users/{id}` — user detail: fields, passkey list, active session count
+- `POST /admin/users/{id}/status` — activate/suspend; suspend revokes all refresh tokens
+- `DELETE /admin/users/{id}` — cascade delete: revoke tokens → delete credentials → delete user
+- `POST /admin/users/{id}/reset-passkey` — issues 24h `PasskeyRecovery` challenge, returns recovery URL
+- `GET /recover?token=X` — recovery page (same UX as register-confirm)
+- `POST /auth/recover/begin` / `POST /auth/recover/complete` — recovery flow attaches new credential to existing user
+- `ChallengeType::PasskeyRecovery` added to domain + db serialization
+- `CredentialRepository::delete_all_for_user` + `UserRepository::delete` added
+- `UserRepository::list` extended with optional email/role/status filters (full scan when filtered)
+- `@passkeyRecoverWithToken()` action added to passkey-plugin.js
+- `bootstrap --reset-credentials` flag purges existing admin credentials before re-issuing enrollment URL
+- Fixed pre-existing broken tests in `domain` (3-arg calls to `new_admin_enrollment`, `RefreshToken::new`)
+- `askama` workspace dep updated to enable `serde-json` feature (required by `|json` filter in templates)
 
 ### Admin features
 - `GET /admin` — dashboard with DynamoDB table stats

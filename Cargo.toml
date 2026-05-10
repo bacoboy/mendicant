@@ -45,7 +45,7 @@ jsonwebtoken = "9"
 rsa = { version = "0.9", features = ["pem"] }
 
 # templating
-askama = "0.12"
+askama = { version = "0.12", features = ["serde-json"] }
 
 # cli
 clap = { version = "4", features = ["derive", "env"] }

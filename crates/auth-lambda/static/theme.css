@@ -369,6 +369,116 @@ tbody tr:hover td { background: var(--surface0); }
   gap: 0.4rem;
 }
 
+/* ── Admin sidebar layout ─────────────────────────────────────────────── */
+
+/* Reuses .page-sidebar full-width override */
+.admin-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  min-height: calc(100vh - 3rem);
+  align-items: start;
+}
+
+.admin-sidenav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  position: sticky;
+  top: 3rem;
+  height: calc(100vh - 3rem);
+  padding: 1.5rem 0.75rem;
+  background: var(--mantle);
+  border-right: 1px solid var(--surface0);
+  overflow-y: auto;
+}
+
+.admin-sidenav-section {
+  color: var(--subtext0);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.75rem 0.75rem 0.25rem;
+}
+.admin-sidenav-section:first-child { padding-top: 0.25rem; }
+
+.admin-sidenav-link {
+  display: block;
+  padding: 0.4rem 0.75rem;
+  border-radius: 5px;
+  color: var(--subtext1);
+  text-decoration: none;
+  font-size: 0.88rem;
+  transition: background 0.1s, color 0.1s;
+}
+.admin-sidenav-link:hover {
+  background: var(--surface0);
+  color: var(--text);
+  text-decoration: none;
+}
+.admin-sidenav-link.active {
+  background: var(--surface1);
+  color: var(--lavender);
+}
+.admin-sidenav-link.sub {
+  padding-left: 1.5rem;
+  font-size: 0.82rem;
+}
+
+.admin-content {
+  padding: 2rem 2.5rem;
+  min-width: 0;
+}
+
+/* ── Admin user list ──────────────────────────────────────────────────── */
+.user-search-bar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+.user-search-bar input[type=text] {
+  flex: 1;
+  min-width: 180px;
+}
+.user-search-bar select {
+  background: var(--surface0);
+  border: 1px solid var(--surface2);
+  border-radius: 5px;
+  color: var(--text);
+  padding: 0.45rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.user-table tr { cursor: pointer; }
+.user-table tr:hover td { background: var(--surface0); }
+
+.badge-zero-creds { background: rgba(250,179,135,0.15); color: var(--peach); }
+.badge-suspended  { background: rgba(243,139,168,0.15); color: var(--red);   }
+
+/* ── Admin user detail ────────────────────────────────────────────────── */
+.user-detail-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--surface0);
+}
+
+.recovery-url-box {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--mantle);
+  border: 1px solid var(--surface1);
+  border-radius: 5px;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+.recovery-url-box a { color: var(--teal); }
+
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 .button-group { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
 .text-center  { text-align: center; }

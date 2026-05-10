@@ -467,6 +467,65 @@ async function doLogin(ctx) {
 }
 
 /**
+ * @passkeyRecoverWithToken()
+ *
+ * Passkey recovery flow for users who have lost access to their authenticator.
+ * Token is set in window.root.recoveryToken by the recover page script.
+ *   1. POST /auth/recover/begin  → challenge (consumes the recovery token)
+ *   2. navigator.credentials.create()
+ *   3. POST /auth/recover/complete → auth cookie + redirect to /me
+ */
+async function doRecoverWithToken(ctx) {
+  setSignal('recoverError', '');
+
+  const token = window.root?.recoveryToken || window.Datastar?.root?.recoveryToken;
+  if (!token) {
+    setSignal('recoverError', 'Invalid recovery link. Please contact an administrator.');
+    return;
+  }
+
+  let beginSignals;
+  try {
+    beginSignals = await fetchSSE('/auth/recover/begin', { token });
+  } catch (e) {
+    setSignal('recoverError', `Could not start recovery: ${e.message}`);
+    return;
+  }
+
+  const { challengeId, registerOptions } = beginSignals;
+  if (!challengeId || !registerOptions) {
+    setSignal('recoverError', 'Server did not return registration options.');
+    return;
+  }
+
+  let credential;
+  try {
+    credential = await navigator.credentials.create(toCreationOptions(registerOptions));
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      setSignal('recoverError', 'Passkey creation was cancelled.');
+    } else {
+      setSignal('recoverError', `Passkey creation failed: ${e.message}`);
+    }
+    return;
+  }
+
+  if (!credential) {
+    setSignal('recoverError', 'No credential was returned by the authenticator.');
+    return;
+  }
+
+  try {
+    await fetchSSE('/auth/recover/complete', {
+      challenge_id: challengeId,
+      response: serializeRegistration(credential),
+    });
+  } catch (e) {
+    setSignal('recoverError', `Recovery failed: ${e.message}`);
+  }
+}
+
+/**
  * @adminEnroll()
  *
  * Admin YubiKey enrollment flow:
@@ -582,6 +641,15 @@ document.addEventListener('DOMContentLoaded', () => {
       await doLogin(null);
     });
     console.log('[passkey-plugin] Login button listener attached');
+  }
+
+  // Find passkey recovery button
+  const recoverBtn = document.querySelector('button[data-on-click="passkeyRecoverWithToken"]');
+  if (recoverBtn) {
+    recoverBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await doRecoverWithToken(null);
+    });
   }
 
   // Find admin enrollment button

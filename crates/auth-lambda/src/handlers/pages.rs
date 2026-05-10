@@ -26,6 +26,7 @@ pub fn routes() -> Router<AppState> {
         .route("/login", get(login_page))
         .route("/register", get(register_page))
         .route("/register-confirm", get(register_confirm_page))
+        .route("/recover", get(recover_page))
         .route("/activate", get(activate_page))
         .route("/me", get(profile_page))
         .route("/me", patch(update_profile))
@@ -46,6 +47,13 @@ struct RegisterPage;
 #[derive(Template)]
 #[template(path = "register-confirm.html")]
 struct RegisterConfirmPage;
+
+#[derive(Template)]
+#[template(path = "recover.html")]
+#[allow(dead_code)]
+struct RecoverPage {
+    token: String,
+}
 
 #[derive(Template)]
 #[template(path = "activate.html")]
@@ -99,6 +107,16 @@ async fn register_page() -> impl IntoResponse {
 
 async fn register_confirm_page() -> impl IntoResponse {
     render(RegisterConfirmPage)
+}
+
+async fn recover_page(
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let token = params.get("token").cloned().unwrap_or_default();
+    if token.is_empty() {
+        return (axum::http::StatusCode::BAD_REQUEST, "Missing recovery token.").into_response();
+    }
+    render(RecoverPage { token }).into_response()
 }
 
 async fn activate_page(

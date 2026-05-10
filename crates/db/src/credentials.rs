@@ -201,4 +201,21 @@ impl CredentialRepository {
             .await?;
         Ok(())
     }
+
+    /// Delete all credentials for a user. Used during account deletion and
+    /// admin-initiated passkey reset (bootstrap --reset-credentials).
+    pub async fn delete_all_for_user(&self, user_id: &UserId) -> Result<(), DbError> {
+        let creds = self.list_for_user(user_id).await?;
+        for cred in creds {
+            if let Err(e) = self.delete(user_id, &cred.id).await {
+                tracing::warn!(
+                    user_id = %user_id,
+                    credential_id = %cred.id.0,
+                    error = %e,
+                    "failed to delete credential during bulk delete"
+                );
+            }
+        }
+        Ok(())
+    }
 }

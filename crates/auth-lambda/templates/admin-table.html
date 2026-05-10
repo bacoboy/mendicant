@@ -2,7 +2,7 @@
 
 {% block title %}{{ table_name }} – admin – mendicant{% endblock %}
 
-{% block page_class %}page-full{% endblock %}
+{% block page_class %}page-sidebar{% endblock %}
 
 {% block nav_right %}
   <a href="/admin">admin</a>
@@ -13,99 +13,67 @@
 {% endblock %}
 
 {% block content %}
-  <div class="nav"><a href="/admin">← admin</a></div>
+  <div class="admin-layout">
+    {% include "admin-sidenav.html" %}
 
-  <h1>{{ table_name }}</h1>
-  <p style="margin-bottom:1.5rem;">
-    {% if scope == "Global" %}
-    <span class="badge badge-global">global table</span>
-    {% else %}
-    <span class="badge badge-regional">regional table</span>
-    {% endif %}
-  </p>
+    <div class="admin-content">
+      <h1>{{ table_name }}</h1>
+      <p style="margin-bottom:1.5rem;">
+        {% if scope == "Global" %}
+        <span class="badge badge-global">global table</span>
+        {% else %}
+        <span class="badge badge-regional">regional table</span>
+        {% endif %}
+      </p>
 
-  <div class="card" style="overflow-x:auto;">
-    {% if rows.is_empty() %}
-    <p class="muted text-center" style="padding:2rem 0;">no items found.</p>
-    {% else %}
-    <div {% if has_details %}data-signals='{"exp":""}'{% endif %}>
-      <table>
-        <thead>
-          <tr>
-            {% if has_details %}<th style="width:2rem;"></th>{% endif %}
-            {% for h in headers %}
-            <th>{{ h }}</th>
+      <div class="card" style="overflow-x:auto;">
+        {% if rows.is_empty() %}
+        <p class="muted text-center" style="padding:2rem 0;">no items found.</p>
+        {% else %}
+        <table>
+          <thead>
+            <tr>
+              {% for h in headers %}
+              <th>{{ h }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              {% for cell in row.cells %}
+              <td title="{{ cell.value }}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {%- if let Some(href) = cell.href -%}
+                <a href="{{ href }}">{{ cell.value }}</a>
+                {%- else -%}
+                {{ cell.value }}
+                {%- endif -%}
+              </td>
+              {% endfor %}
+            </tr>
             {% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in rows %}
-          <tr>
-            {% match row.detail %}
-            {% when Some(detail) %}
-            <td style="text-align:center;cursor:pointer;user-select:none;"
-                data-on-click="$exp = $exp === '{{ detail.uuid }}' ? '' : '{{ detail.uuid }}'">
-              <span data-text="$exp === '{{ detail.uuid }}' ? '▼' : '▶'">▶</span>
-            </td>
-            {% when None %}
-            {% endmatch %}
-            {% for cell in row.cells %}
-            <td title="{{ cell }}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ cell }}</td>
-            {% endfor %}
-          </tr>
-          {% match row.detail %}
-          {% when Some(detail) %}
-          <tr style="display:none;" data-show="$exp === '{{ detail.uuid }}'">
-            <td colspan="{{ headers.len() + 1 }}" style="padding:0;background:var(--mantle);">
-              {% if detail.credential_rows.is_empty() %}
-              <p class="muted" style="padding:0.75rem 1rem;">no credentials.</p>
-              {% else %}
-              <table style="font-size:0.8rem;">
-                <thead>
-                  <tr>
-                    <th>nickname</th>
-                    <th>key type</th>
-                    <th>sign count</th>
-                    <th>last used</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for cred in detail.credential_rows %}
-                  <tr>
-                    {% for cell in cred %}
-                    <td>{{ cell }}</td>
-                    {% endfor %}
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-              {% endif %}
-            </td>
-          </tr>
-          {% when None %}
-          {% endmatch %}
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+          </tbody>
+        </table>
 
-    <div class="button-group" style="margin-top:1rem;">
-      <span class="muted">showing {{ item_count }} item{% if item_count != 1 %}s{% endif %}</span>
-      {% if let Some(cursor) = next_cursor %}
-      <a href="/admin/tables/{{ table_slug }}?cursor={{ cursor }}" class="btn btn-secondary btn-sm">
-        next page →
-      </a>
-      {% endif %}
-    </div>
-    {% endif %}
-  </div>
-{% endblock %}
-
-{% block scripts %}
-  {% if has_details %}
-  <script type="module">
-    import('/static/datastar.js').then(ds => { window.Datastar = ds; window.root = ds.root; });
-  </script>
-  <script type="module" src="/static/passkey-plugin.js"></script>
-  {% endif %}
+        <div class="button-group" style="margin-top:1rem;">
+          <span class="muted">
+            page {{ current_page }}
+            {%- if approx_total > 0 %}
+              · ~{{ approx_total }} total
+            {%- endif %}
+            · showing {{ item_count }} item{% if item_count != 1 %}s{% endif %}
+          </span>
+          {% if current_page > 1 %}
+          <a href="/admin/tables/{{ table_slug }}" class="btn btn-secondary btn-sm">← page 1</a>
+          {% endif %}
+          {% if let Some(cursor) = next_cursor %}
+          <a href="/admin/tables/{{ table_slug }}?cursor={{ cursor }}&page={{ current_page + 1 }}" class="btn btn-secondary btn-sm">
+            next page →
+          </a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div><!-- .admin-content -->
+  </div><!-- .admin-layout -->
 {% endblock %}

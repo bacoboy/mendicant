@@ -83,7 +83,7 @@ async fn list_users(
     require_admin(&auth)?;
     let limit = q.limit.unwrap_or(50).min(200);
     let (users, next_cursor) = UserRepository::new(state.db)
-        .list(limit, q.cursor)
+        .list(limit, q.cursor, None, None, None)
         .await
         .context("failed to list users")?;
     Ok(Json(ListResponse {

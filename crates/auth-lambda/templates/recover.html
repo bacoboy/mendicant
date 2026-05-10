@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}recover account – mendicant{% endblock %}
+
+{% block page_class %}page-slim{% endblock %}
+
+{% block nav_right %}
+  <a href="/login">sign in</a>
+{% endblock %}
+
+{% block pre_content %}
+  <script>
+    window.__recoveryToken = {{ token|json }};
+  </script>
+{% endblock %}
+
+{% block content %}
+  <h1>recover account</h1>
+
+  <div data-signals='{"recoverError":""}'>
+    <div class="notice">
+      register a new passkey for your existing account.
+    </div>
+
+    <div data-show="$recoverError !== ''" class="error" data-text="$recoverError"></div>
+
+    <button type="button" class="btn btn-primary full-width"
+            data-on-click="passkeyRecoverWithToken">register new passkey</button>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module">
+    import('/static/datastar.js').then(ds => {
+      window.Datastar = ds;
+      window.root = ds.root;
+      if (window.__recoveryToken) {
+        window.root.recoveryToken = window.__recoveryToken;
+      }
+    }).catch(e => console.error('Failed to load Datastar:', e));
+  </script>
+  <script type="module" src="/static/passkey-plugin.js"></script>
+{% endblock %}

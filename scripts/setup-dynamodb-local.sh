@@ -126,6 +126,44 @@ ensure_table "users" \
     "AttributeName=pk,KeyType=HASH AttributeName=sk,KeyType=RANGE"
 ensure_gsi "users" "email-index" "{AttributeName=email,KeyType=HASH}"
 
+# sk-email-index: hash=sk("PROFILE"), range=email — list-all + prefix search
+gsi_exists=$(aws dynamodb describe-table --table-name "users" \
+    --endpoint-url "$ENDPOINT" --region "$REGION" --profile "$PROFILE" \
+    --query "Table.GlobalSecondaryIndexes[?IndexName=='sk-email-index']" \
+    --output json 2>/dev/null | grep -c "sk-email-index" || true)
+if [ "$gsi_exists" -eq 0 ]; then
+    echo "  Adding GSI 'sk-email-index'..."
+    aws dynamodb update-table --table-name "users" \
+        --attribute-definitions \
+            "AttributeName=sk,AttributeType=S" \
+            "AttributeName=email,AttributeType=S" \
+        --global-secondary-index-updates \
+            "Create={IndexName=sk-email-index,KeySchema=[{AttributeName=sk,KeyType=HASH},{AttributeName=email,KeyType=RANGE}],Projection={ProjectionType=ALL}}" \
+        --endpoint-url "$ENDPOINT" --region "$REGION" --profile "$PROFILE" >/dev/null
+    echo -e "${GREEN}  ✓ GSI 'sk-email-index' created${NC}"
+else
+    echo -e "${YELLOW}  ✓ GSI 'sk-email-index' already exists${NC}"
+fi
+
+# role-index: hash=role, range=email — efficient role filter + optional prefix search
+gsi_exists=$(aws dynamodb describe-table --table-name "users" \
+    --endpoint-url "$ENDPOINT" --region "$REGION" --profile "$PROFILE" \
+    --query "Table.GlobalSecondaryIndexes[?IndexName=='role-index']" \
+    --output json 2>/dev/null | grep -c "role-index" || true)
+if [ "$gsi_exists" -eq 0 ]; then
+    echo "  Adding GSI 'role-index'..."
+    aws dynamodb update-table --table-name "users" \
+        --attribute-definitions \
+            "AttributeName=role,AttributeType=S" \
+            "AttributeName=email,AttributeType=S" \
+        --global-secondary-index-updates \
+            "Create={IndexName=role-index,KeySchema=[{AttributeName=role,KeyType=HASH},{AttributeName=email,KeyType=RANGE}],Projection={ProjectionType=ALL}}" \
+        --endpoint-url "$ENDPOINT" --region "$REGION" --profile "$PROFILE" >/dev/null
+    echo -e "${GREEN}  ✓ GSI 'role-index' created${NC}"
+else
+    echo -e "${YELLOW}  ✓ GSI 'role-index' already exists${NC}"
+fi
+
 # Credentials table
 ensure_table "credentials" \
     "AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S" \

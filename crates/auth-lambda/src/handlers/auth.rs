@@ -41,6 +41,8 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/passkey/add/begin", post(add_passkey_begin))
         .route("/auth/passkey/add/complete", post(add_passkey_complete))
         .route("/auth/sessions/revoke-others", post(revoke_other_sessions))
+        .route("/auth/recover/begin", post(recover_begin))
+        .route("/auth/recover/complete", post(recover_complete))
 }
 
 // ── Email Validation ──────────────────────────────────────────────────────────
@@ -630,6 +632,172 @@ async fn add_passkey_complete(
         .redirect("/me"))
 }
 
+// ── Passkey Recovery ──────────────────────────────────────────────────────────
+//
+// Flow initiated by an admin via POST /admin/users/:id/reset-passkey.
+// The admin receives a single-use PasskeyRecovery challenge token and sends
+// the /recover?token=<id> URL to the locked-out user out-of-band.
+// recover_begin consumes the token, looks up the existing user, and starts a
+// normal WebAuthn registration ceremony. recover_complete attaches the new
+// credential to the EXISTING user account — no new user is created.
+
+#[derive(Deserialize)]
+struct RecoverBeginRequest {
+    token: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RecoverChallengeState {
+    user_id: String,
+    state: PasskeyRegistration,
+}
+
+async fn recover_begin(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(req): Json<RecoverBeginRequest>,
+) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
+    let challenge_repo = ChallengeRepository::new(state.db.clone());
+    let recovery = challenge_repo
+        .take(&req.token)
+        .await
+        .map_err(|_| AppError::BadRequest("invalid or expired recovery token".into()))?;
+
+    if recovery.challenge_type != domain::challenge::ChallengeType::PasskeyRecovery {
+        return Err(AppError::BadRequest("invalid token type".into()));
+    }
+    if recovery.expires_at < OffsetDateTime::now_utc().unix_timestamp() {
+        return Err(AppError::BadRequest("recovery token has expired".into()));
+    }
+
+    let user_id_str = recovery.user_id
+        .ok_or_else(|| anyhow::anyhow!("recovery token missing user_id"))?;
+    let user_uuid = uuid::Uuid::parse_str(&user_id_str)
+        .map_err(|_| anyhow::anyhow!("invalid user_id in recovery token"))?;
+
+    let user = UserRepository::new(state.db.clone())
+        .get(&domain::user::UserId(user_uuid))
+        .await
+        .map_err(|_| AppError::BadRequest("user not found".into()))?;
+
+    let (ccr, reg_state) = webauthn
+        .start_passkey_registration(user_uuid, &user.email, &user.display_name, None)
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+    let bundled = RecoverChallengeState {
+        user_id: user_id_str,
+        state: reg_state,
+    };
+    let state_json = serde_json::to_string(&bundled)
+        .context("failed to serialize recovery state")?;
+
+    let expires_at = OffsetDateTime::now_utc().unix_timestamp() + CHALLENGE_TTL_SECS;
+    let challenge = Challenge::new_registration(state_json, expires_at);
+    let challenge_id = challenge.id.clone();
+
+    challenge_repo.put(&challenge).await.context("failed to store recovery challenge")?;
+
+    let mut register_opts = serde_json::to_value(&ccr)
+        .context("failed to serialize CreationChallengeResponse")?;
+    if let Some(pk) = register_opts.as_object_mut()
+        .and_then(|o| o.get_mut("publicKey"))
+        .and_then(|pk| pk.as_object_mut())
+    {
+        pk.remove("extensions");
+    }
+
+    let signals = serde_json::json!({
+        "challengeId": challenge_id,
+        "registerOptions": register_opts,
+    });
+
+    Ok(SseResponse::new().patch_signals(&signals.to_string()))
+}
+
+#[derive(Deserialize)]
+struct RecoverCompleteRequest {
+    challenge_id: String,
+    response: RegisterPublicKeyCredential,
+}
+
+async fn recover_complete(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(req): Json<RecoverCompleteRequest>,
+) -> Result<SseResponse, AppError> {
+    let origin = headers.get(axum::http::header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    let webauthn = state.webauthn_for_origin(origin)
+        .ok_or_else(|| AppError::BadRequest(format!("origin not allowed: {origin}")))?;
+
+    let challenge = ChallengeRepository::new(state.db.clone())
+        .take(&req.challenge_id)
+        .await
+        .map_err(|_| AppError::BadRequest("invalid or expired challenge".into()))?;
+
+    let bundled: RecoverChallengeState = serde_json::from_str(&challenge.state_json)
+        .context("failed to deserialize recovery state")?;
+
+    let passkey = webauthn
+        .finish_passkey_registration(&req.response, &bundled.state)
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+    let user_uuid = uuid::Uuid::parse_str(&bundled.user_id)
+        .map_err(|_| anyhow::anyhow!("invalid user_id in recovery challenge"))?;
+    let user_id = domain::user::UserId(user_uuid);
+
+    let user = UserRepository::new(state.db.clone())
+        .get(&user_id)
+        .await
+        .context("failed to load user for recovery")?;
+
+    let cred_id = CredentialId(
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(passkey.cred_id()),
+    );
+    let passkey_bytes = serde_json::to_vec(&passkey).context("failed to serialize passkey")?;
+    let now = OffsetDateTime::now_utc();
+
+    let credential = Credential {
+        id: cred_id,
+        user_id: user_id.clone(),
+        public_key: passkey_bytes,
+        sign_count: 0,
+        aaguid: uuid::Uuid::nil(),
+        nickname: None,
+        created_at: now,
+        last_used_at: now,
+    };
+
+    CredentialRepository::new(state.db.clone())
+        .put(&credential)
+        .await
+        .context("failed to store recovery credential")?;
+
+    let client_hint = ua_hint(&headers);
+    let tokens = issue_tokens(
+        &user_id,
+        &user.role,
+        &user.email,
+        &state.signer,
+        &RefreshTokenRepository::new(state.db.clone()),
+        client_hint,
+    )
+    .await?;
+
+    let secure = is_secure_context();
+    Ok(SseResponse::new()
+        .with_auth_cookie(&tokens.access_token, secure)
+        .with_refresh_cookie(&tokens.refresh_token_jti, secure)
+        .redirect("/me"))
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Returns the credential IDs already registered for an email, so they can be
@@ -713,8 +881,12 @@ async fn logout(
 ) -> Result<impl IntoResponse, AppError> {
     if let Some(jti) = extract_refresh_jti(&headers) {
         let refresh_repo = RefreshTokenRepository::new(state.db.clone());
-        refresh_repo.revoke(&jti).await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+        match refresh_repo.revoke(&jti).await {
+            Ok(()) => {}
+            // Token already gone (purged, expired, or never existed) — still clear cookies.
+            Err(db::error::DbError::NotFound | db::error::DbError::ConditionalCheckFailed) => {}
+            Err(e) => return Err(AppError::Internal(anyhow::anyhow!(e))),
+        }
     }
 
     let secure = is_secure_context();

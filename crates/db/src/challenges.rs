@@ -24,6 +24,7 @@ fn challenge_to_item(c: &Challenge) -> Item {
             ChallengeType::Registration => "registration".into(),
             ChallengeType::Authentication => "authentication".into(),
             ChallengeType::AdminEnrollment => "admin_enrollment".into(),
+            ChallengeType::PasskeyRecovery => "passkey_recovery".into(),
         }),
     );
     m.insert("state_json".into(), AttributeValue::S(c.state_json.clone()));
@@ -45,6 +46,7 @@ fn item_to_challenge(item: Item) -> Result<Challenge, DbError> {
         "registration" => ChallengeType::Registration,
         "authentication" => ChallengeType::Authentication,
         "admin_enrollment" => ChallengeType::AdminEnrollment,
+        "passkey_recovery" => ChallengeType::PasskeyRecovery,
         other => return Err(DbError::Serde(format!("unknown challenge_type: {other}"))),
     };
 

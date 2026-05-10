@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user_email }} – admin – mendicant{% endblock %}
+
+{% block page_class %}page-sidebar{% endblock %}
+
+{% block nav_right %}
+  <a href="/admin">admin</a>
+  <a href="/me" class="topnav-user">{{ nav.email }}</a>
+  <form method="POST" action="/auth/logout" style="display:contents;">
+    <button type="submit" class="topnav-logout">logout</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <div class="admin-layout">
+    {% include "admin-sidenav.html" %}
+
+    <div class="admin-content">
+      <div style="margin-bottom:1rem;">
+        <a href="/admin/users" class="muted" style="font-size:0.88rem;">← all users</a>
+      </div>
+
+      <h1>{{ user_email }}</h1>
+
+      <div id="action-error" class="error-banner" style="display:none;margin-bottom:1rem;"></div>
+
+      <div class="card" style="margin-bottom:1.5rem;">
+        <dl class="profile-fields">
+          <div class="profile-field">
+            <dt>user id</dt>
+            <dd><span class="profile-field-value" style="font-size:0.82rem;">{{ user_id }}</span></dd>
+          </div>
+          <div class="profile-field">
+            <dt>email</dt>
+            <dd><span class="profile-field-value">{{ user_email }}</span></dd>
+          </div>
+          <div class="profile-field">
+            <dt>name</dt>
+            <dd><span class="profile-field-value">{{ display_name }}</span></dd>
+          </div>
+          <div class="profile-field">
+            <dt>role</dt>
+            <dd><span class="profile-field-value">{{ role }}</span></dd>
+          </div>
+          <div class="profile-field">
+            <dt>status</dt>
+            <dd>
+              {% if status == "suspended" %}
+              <span class="badge badge-suspended">suspended</span>
+              {% else if status == "pending_verification" %}
+              <span class="badge badge-regional">pending verification</span>
+              {% else %}
+              <span class="badge badge-active">{{ status }}</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div class="profile-field">
+            <dt>created</dt>
+            <dd><span class="profile-field-value muted">{{ created_at }}</span></dd>
+          </div>
+          <div class="profile-field">
+            <dt>sessions</dt>
+            <dd><span class="profile-field-value">{{ active_session_count }} active</span></dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Passkeys -->
+      <div class="card" style="margin-bottom:1.5rem;">
+        <h2 style="margin-bottom:1rem;">passkeys</h2>
+        {% if credentials.is_empty() %}
+        <p class="muted"><span class="badge badge-zero-creds">0 passkeys</span> — this user cannot log in.</p>
+        {% else %}
+        <table>
+          <thead>
+            <tr>
+              <th>name</th>
+              <th>key type</th>
+              <th>sign count</th>
+              <th>last used</th>
+              <th>added</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in credentials %}
+            <tr>
+              <td>{{ c.nickname }}</td>
+              <td class="muted">{{ c.key_type }}</td>
+              <td class="num muted">{{ c.sign_count }}</td>
+              <td class="muted">{{ c.last_used_at }}</td>
+              <td class="muted">{{ c.created_at }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+
+      <!-- Actions -->
+      <div class="user-detail-actions">
+        {% if status == "suspended" %}
+        <button class="btn btn-secondary" onclick="setStatus('active')">activate user</button>
+        {% else %}
+        <button class="btn btn-secondary" onclick="setStatus('suspended')">suspend user</button>
+        {% endif %}
+
+        <button class="btn btn-secondary" id="reset-passkey-btn"
+                onclick="resetPasskey()">send passkey reset link</button>
+
+        <button class="btn btn-danger" onclick="deleteUser()">delete user</button>
+      </div>
+
+      <div id="recovery-url-box" class="recovery-url-box" style="display:none;">
+        <div class="muted" style="margin-bottom:0.4rem;">recovery link (copy and send to user):</div>
+        <a id="recovery-url-link" href="#"></a>
+      </div>
+    </div><!-- .admin-content -->
+  </div><!-- .admin-layout -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const userId = {{ user_id|json }};
+
+  function showError(msg) {
+    const el = document.getElementById('action-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 7000);
+  }
+
+  async function setStatus(status) {
+    const label = status === 'suspended' ? 'suspend' : 'activate';
+    if (!confirm(`${label} this user?\n\nSuspending revokes all active sessions immediately.`)) return;
+    try {
+      const resp = await fetch(`/admin/users/${userId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!resp.ok) throw new Error(await resp.text() || 'request failed');
+      window.location.reload();
+    } catch (e) {
+      showError('failed: ' + e.message);
+    }
+  }
+
+  async function resetPasskey() {
+    const btn = document.getElementById('reset-passkey-btn');
+    btn.disabled = true;
+    btn.textContent = 'generating…';
+    try {
+      const resp = await fetch(`/admin/users/${userId}/reset-passkey`, { method: 'POST' });
+      if (!resp.ok) throw new Error(await resp.text() || 'request failed');
+      const data = await resp.json();
+      const box = document.getElementById('recovery-url-box');
+      const link = document.getElementById('recovery-url-link');
+      link.href = data.recovery_url;
+      link.textContent = data.recovery_url;
+      box.style.display = 'block';
+    } catch (e) {
+      showError('failed: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'send passkey reset link';
+    }
+  }
+
+  async function deleteUser() {
+    if (!confirm('permanently delete this user?\n\nThis will delete the user record, all passkeys, and revoke all sessions. This cannot be undone.')) return;
+    if (!confirm('are you absolutely sure? type "delete" in the next prompt.')) return;
+    const confirm2 = prompt('type DELETE to confirm:');
+    if (confirm2 !== 'DELETE') { alert('cancelled.'); return; }
+    try {
+      const resp = await fetch(`/admin/users/${userId}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(await resp.text() || 'request failed');
+      window.location.href = '/admin/users';
+    } catch (e) {
+      showError('delete failed: ' + e.message);
+    }
+  }
+</script>
+{% endblock %}

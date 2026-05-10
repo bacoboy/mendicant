@@ -23,6 +23,7 @@ use anyhow::{Context as _, bail};
 use clap::Parser;
 use db::challenges::ChallengeRepository;
 use db::client::DynamoClient;
+use db::credentials::CredentialRepository;
 use db::users::UserRepository;
 use domain::challenge::Challenge;
 use domain::user::{Role, User, UserStatus};
@@ -49,6 +50,13 @@ struct Args {
     /// How many minutes the enrollment URL remains valid
     #[arg(long, default_value_t = DEFAULT_TTL_MINUTES)]
     ttl_minutes: u64,
+
+    /// Purge all existing credentials for this admin before issuing a new
+    /// enrollment URL. Required when the admin has lost access to their key
+    /// and needs to re-enroll. Without this flag, re-running for an existing
+    /// admin simply issues a new enrollment URL without touching credentials.
+    #[arg(long)]
+    reset_credentials: bool,
 }
 
 #[tokio::main]
@@ -71,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
     let db = DynamoClient::from_env(ddb_client);
     let users_repo = UserRepository::new(db.clone());
     let challenges_repo = ChallengeRepository::new(db.clone());
+    let creds_repo = CredentialRepository::new(db.clone());
 
     // Resolve or create the admin user record.
     let user = match users_repo.get_by_email(&args.email).await {
@@ -83,7 +92,31 @@ async fn main() -> anyhow::Result<()> {
                     existing.role
                 );
             }
-            println!("Admin user already exists — reusing it.");
+
+            let creds = creds_repo
+                .list_for_user(&existing.id)
+                .await
+                .context("failed to list existing credentials")?;
+
+            if !creds.is_empty() {
+                if args.reset_credentials {
+                    creds_repo
+                        .delete_all_for_user(&existing.id)
+                        .await
+                        .context("failed to delete existing credentials")?;
+                    println!("Deleted {} existing credential(s).", creds.len());
+                } else {
+                    println!(
+                        "Admin user already exists with {} credential(s). \
+                         Re-issuing enrollment URL without touching credentials.\n\
+                         Pass --reset-credentials to purge all credentials first.",
+                        creds.len()
+                    );
+                }
+            } else {
+                println!("Admin user already exists (no credentials) — reusing it.");
+            }
+
             existing
         }
         Err(_) => {

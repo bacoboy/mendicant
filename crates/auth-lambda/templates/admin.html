@@ -2,7 +2,7 @@
 
 {% block title %}admin – mendicant{% endblock %}
 
-{% block page_class %}page-wide{% endblock %}
+{% block page_class %}page-sidebar{% endblock %}
 
 {% block nav_right %}
   <a href="/admin">admin</a>
@@ -13,52 +13,57 @@
 {% endblock %}
 
 {% block content %}
-  <h1>admin</h1>
-  <p class="muted" style="margin-bottom:1.5rem;">administrator dashboard</p>
+  <div class="admin-layout">
+    {% include "admin-sidenav.html" %}
 
-  <div class="card">
-    <h2>dynamodb tables</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>table</th>
-          <th>scope</th>
-          <th>status</th>
-          <th>items (approx)</th>
-          <th>size (approx)</th>
-          <th>billing</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in tables %}
-        <tr>
-          <td><a href="/admin/tables/{{ t.slug }}">{{ t.name }}</a></td>
-          <td>
-            {% if t.scope == "Global" %}
-            <span class="badge badge-global">global</span>
-            {% else %}
-            <span class="badge badge-regional">regional</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if t.status == "ACTIVE" %}
-            <span class="badge badge-active">active</span>
-            {% else if t.status == "error" %}
-            <span class="badge badge-error">error</span>
-            {% else %}
-            <span class="badge">{{ t.status }}</span>
-            {% endif %}
-          </td>
-          <td class="num">{{ t.item_count }}</td>
-          <td class="num">{{ t.size }}</td>
-          <td>{{ t.billing_mode }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <p class="muted" style="margin-top:0.75rem;">
-      item counts and sizes are approximate, updated every ~6 hours by dynamodb.
-    </p>
-  </div>
+    <div class="admin-content">
+      <h1>dashboard</h1>
+      <p class="muted" style="margin-bottom:1.5rem;">administrator overview</p>
 
+      <div class="card">
+        <h2>dynamodb tables</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>table</th>
+              <th>scope</th>
+              <th>status</th>
+              <th>items (approx)</th>
+              <th>size (approx)</th>
+              <th>billing</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tables %}
+            <tr>
+              <td><a href="{{ t.href }}">{{ t.name }}</a></td>
+              <td>
+                {% if t.scope == "Global" %}
+                <span class="badge badge-global">global</span>
+                {% else %}
+                <span class="badge badge-regional">regional</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if t.status == "ACTIVE" %}
+                <span class="badge badge-active">active</span>
+                {% else if t.status == "error" %}
+                <span class="badge badge-error">error</span>
+                {% else %}
+                <span class="badge">{{ t.status }}</span>
+                {% endif %}
+              </td>
+              <td class="num">{{ t.item_count }}</td>
+              <td class="num">{{ t.size }}</td>
+              <td>{{ t.billing_mode }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="muted" style="margin-top:0.75rem;">
+          item counts and sizes are approximate, updated every ~6 hours by dynamodb.
+        </p>
+      </div>
+    </div><!-- .admin-content -->
+  </div><!-- .admin-layout -->
 {% endblock %}

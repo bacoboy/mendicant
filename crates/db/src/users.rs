@@ -194,23 +194,83 @@ impl UserRepository {
         Ok(())
     }
 
-    /// Returns up to `limit` users with cursor-based pagination.
-    /// The cursor is an opaque base64url token representing the DynamoDB
-    /// LastEvaluatedKey — pass it back as `cursor` to get the next page.
+    /// Delete a user record. Call `CredentialRepository::delete_all_for_user`
+    /// and `RefreshTokenRepository::revoke_all_for_user` first.
+    pub async fn delete(&self, id: &UserId) -> Result<(), DbError> {
+        self.db.inner
+            .delete_item()
+            .table_name(&self.db.users_table)
+            .key("pk", pk(id))
+            .key("sk", AttributeValue::S(SK.into()))
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    /// Returns up to `limit` users with cursor-based pagination using GSI queries
+    /// (no table scans).
+    ///
+    /// Routing logic:
+    /// - role filter present  → `role-index` (pk=role, sk=email)
+    /// - no role filter       → `sk-email-index` (pk=sk="PROFILE", sk=email)
+    ///
+    /// In both cases an email prefix (`begins_with`) is pushed into the key
+    /// condition when provided. Status is always a post-read FilterExpression.
     pub async fn list(
         &self,
         limit: u32,
         cursor: Option<String>,
+        email_query: Option<&str>,
+        role_filter: Option<&Role>,
+        status_filter: Option<&UserStatus>,
     ) -> Result<(Vec<User>, Option<String>), DbError> {
         let mut req = self.db.inner
-            .scan()
+            .query()
             .table_name(&self.db.users_table)
-            .filter_expression("sk = :sk")
-            .expression_attribute_values(":sk", AttributeValue::S(SK.into()))
             .limit(limit as i32);
 
         if let Some(token) = cursor {
             req = req.set_exclusive_start_key(Some(decode_cursor(&token)?));
+        }
+
+        // Choose GSI and build key condition.
+        if let Some(role) = role_filter {
+            // role-index: hash=role, range=email
+            req = req
+                .index_name("role-index")
+                .expression_attribute_values(":role", AttributeValue::S(role_to_str(role).into()));
+
+            if let Some(prefix) = email_query {
+                req = req
+                    .key_condition_expression("#role = :role AND begins_with(email, :pfx)")
+                    .expression_attribute_names("#role", "role")
+                    .expression_attribute_values(":pfx", AttributeValue::S(prefix.into()));
+            } else {
+                req = req
+                    .key_condition_expression("#role = :role")
+                    .expression_attribute_names("#role", "role");
+            }
+        } else {
+            // sk-email-index: hash=sk("PROFILE"), range=email
+            req = req
+                .index_name("sk-email-index")
+                .expression_attribute_values(":sk", AttributeValue::S(SK.into()));
+
+            if let Some(prefix) = email_query {
+                req = req
+                    .key_condition_expression("sk = :sk AND begins_with(email, :pfx)")
+                    .expression_attribute_values(":pfx", AttributeValue::S(prefix.into()));
+            } else {
+                req = req.key_condition_expression("sk = :sk");
+            }
+        }
+
+        // Status filter is always a post-read filter expression.
+        if let Some(status) = status_filter {
+            req = req
+                .filter_expression("#status = :status")
+                .expression_attribute_names("#status", "status")
+                .expression_attribute_values(":status", AttributeValue::S(status_to_str(status).into()));
         }
 
         let resp = req.send().await?;

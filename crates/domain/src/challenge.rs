@@ -9,6 +9,9 @@ pub enum ChallengeType {
     /// One-time token created by the bootstrap tool to enrol an admin YubiKey.
     /// Stored in the challenges table; consumed atomically on enrol begin.
     AdminEnrollment,
+    /// One-time token created by an admin to let an existing user re-register
+    /// a passkey after losing access to their authenticator.
+    PasskeyRecovery,
 }
 
 /// A short-lived WebAuthn challenge stored in the regional challenges table.
@@ -63,6 +66,19 @@ impl Challenge {
             expires_at,
         }
     }
+
+    /// Creates a one-time passkey recovery token issued by an admin. No webauthn
+    /// state — `state_json` is empty. Consumed atomically by `recover/begin`,
+    /// which reads `user_id` to look up the existing account.
+    pub fn new_passkey_recovery(user_id: String, expires_at: i64) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            challenge_type: ChallengeType::PasskeyRecovery,
+            state_json: String::new(),
+            user_id: Some(user_id),
+            expires_at,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -93,14 +109,20 @@ mod tests {
     }
 
     #[test]
-    fn admin_enrollment_challenge_carries_user_id_and_nickname() {
+    fn admin_enrollment_challenge_carries_user_id() {
         let uid = "user-xyz".to_string();
-        let c = Challenge::new_admin_enrollment(uid.clone(), Some("Steve's key".into()), 9999999999);
+        let c = Challenge::new_admin_enrollment(uid.clone(), 9999999999);
         assert_eq!(c.challenge_type, ChallengeType::AdminEnrollment);
         assert_eq!(c.user_id.as_deref(), Some("user-xyz"));
-        assert_eq!(c.state_json, "Steve's key");
+        assert!(c.state_json.is_empty());
+    }
 
-        let c2 = Challenge::new_admin_enrollment(uid.clone(), None, 9999999999);
-        assert!(c2.state_json.is_empty());
+    #[test]
+    fn passkey_recovery_challenge_carries_user_id() {
+        let uid = "user-xyz".to_string();
+        let c = Challenge::new_passkey_recovery(uid.clone(), 9999999999);
+        assert_eq!(c.challenge_type, ChallengeType::PasskeyRecovery);
+        assert_eq!(c.user_id.as_deref(), Some("user-xyz"));
+        assert!(c.state_json.is_empty());
     }
 }

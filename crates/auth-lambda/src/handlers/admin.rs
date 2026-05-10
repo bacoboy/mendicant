@@ -26,6 +26,16 @@ use crate::middleware::AuthUser;
 use crate::sse::SseResponse;
 use crate::state::AppState;
 
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
+fn require_admin(claims: &domain::token::AccessTokenClaims) -> Result<(), AppError> {
+    if claims.role != Role::Administrator {
+        Err(AppError::Forbidden)
+    } else {
+        Ok(())
+    }
+}
+
 // ── Hardware key enforcement ──────────────────────────────────────────────────
 //
 // Admin enrollment requires a physical roaming authenticator (USB/NFC security
@@ -48,6 +58,11 @@ const CHALLENGE_TTL_SECS: i64 = 300; // 5 minutes for the WebAuthn ceremony
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin", get(admin_page))
+        .route("/admin/users", get(admin_users_page))
+        .route("/admin/users/{id}", get(admin_user_detail_page))
+        .route("/admin/users/{id}/status", post(admin_user_set_status))
+        .route("/admin/users/{id}", axum::routing::delete(admin_delete_user))
+        .route("/admin/users/{id}/reset-passkey", post(admin_reset_passkey))
         .route("/admin/tables/{table}", get(table_page))
         .route("/admin/enroll", get(enroll_page))
         .route("/admin/enroll/begin", post(enroll_begin))
@@ -64,6 +79,7 @@ pub struct TableInfo {
     pub item_count: String,
     pub size: String,
     pub billing_mode: String,
+    pub href: String,
 }
 
 #[derive(Template)]
@@ -72,6 +88,8 @@ pub struct TableInfo {
 struct AdminPage {
     nav: NavUser,
     tables: Vec<TableInfo>,
+    active_section: &'static str,
+    active_table: &'static str,
 }
 
 async fn admin_page(
@@ -82,17 +100,19 @@ async fn admin_page(
         return Err(AppError::Forbidden);
     }
 
-    let tables_config: &[(&str, &'static str, &'static str)] = &[
-        (&state.db.users_table, "users", "Global"),
-        (&state.db.credentials_table, "credentials", "Global"),
-        (&state.db.refresh_tokens_table, "refresh-tokens", "Global"),
-        (&state.db.challenges_table, "challenges", "Regional"),
-        (&state.db.email_tokens_table, "email-tokens", "Regional"),
-        (&state.db.oauth_devices_table, "oauth-devices", "Regional"),
+    // (table_name, slug, scope, browse_href)
+    // users and credentials have dedicated UI — link there instead of the removed raw views.
+    let tables_config: &[(&str, &'static str, &'static str, &'static str)] = &[
+        (&state.db.users_table, "users", "Global", "/admin/users"),
+        (&state.db.credentials_table, "credentials", "Global", "/admin/users"),
+        (&state.db.refresh_tokens_table, "refresh-tokens", "Global", "/admin/tables/refresh-tokens"),
+        (&state.db.challenges_table, "challenges", "Regional", "/admin/tables/challenges"),
+        (&state.db.email_tokens_table, "email-tokens", "Regional", "/admin/tables/email-tokens"),
+        (&state.db.oauth_devices_table, "oauth-devices", "Regional", "/admin/tables/oauth-devices"),
     ];
 
     let mut tables = Vec::with_capacity(tables_config.len());
-    for (table_name, slug, scope) in tables_config {
+    for (table_name, slug, scope, browse_href) in tables_config {
         let info = match state.db.inner.describe_table().table_name(*table_name).send().await {
             Ok(resp) => {
                 let td = resp.table();
@@ -120,6 +140,7 @@ async fn admin_page(
                     item_count: format_number(item_count),
                     size: format_bytes(size_bytes),
                     billing_mode,
+                    href: browse_href.to_string(),
                 }
             }
             Err(e) => {
@@ -132,6 +153,7 @@ async fn admin_page(
                     item_count: "—".into(),
                     size: "—".into(),
                     billing_mode: "—".into(),
+                    href: browse_href.to_string(),
                 }
             }
         };
@@ -142,6 +164,8 @@ async fn admin_page(
         AdminPage {
             nav: NavUser { email: claims.email.clone(), is_admin: true },
             tables,
+            active_section: "dashboard",
+            active_table: "",
         }.render().map_err(|e| anyhow::anyhow!(e))?,
     ))
 }
@@ -153,16 +177,23 @@ const PAGE_SIZE: i32 = 25;
 #[derive(Deserialize)]
 struct TableBrowseQuery {
     cursor: Option<String>,
+    page: Option<u32>,
 }
 
-struct UserDetail {
-    uuid: String,
-    credential_rows: Vec<Vec<String>>,
+struct TableCell {
+    value: String,
+    href: Option<String>,
+}
+
+impl TableCell {
+    fn plain(s: impl Into<String>) -> Self { Self { value: s.into(), href: None } }
+    fn linked(s: impl Into<String>, href: impl Into<String>) -> Self {
+        Self { value: s.into(), href: Some(href.into()) }
+    }
 }
 
 struct TableRow {
-    cells: Vec<String>,
-    detail: Option<UserDetail>,
+    cells: Vec<TableCell>,
 }
 
 #[derive(Template)]
@@ -173,11 +204,14 @@ struct AdminTableTemplate {
     table_name: String,
     table_slug: String,
     scope: &'static str,
-    has_details: bool,
     headers: Vec<&'static str>,
     rows: Vec<TableRow>,
     next_cursor: Option<String>,
     item_count: usize,
+    current_page: u32,
+    approx_total: i64,
+    active_section: &'static str,
+    active_table: String,
 }
 
 async fn table_page(
@@ -191,16 +225,6 @@ async fn table_page(
     }
 
     let (ddb_table, scope, headers): (&str, &'static str, Vec<&'static str>) = match slug.as_str() {
-        "users" => (
-            &state.db.users_table,
-            "Global",
-            vec!["UUID", "Email", "Display Name", "Role", "Status", "Created"],
-        ),
-        "credentials" => (
-            &state.db.credentials_table,
-            "Global",
-            vec!["User ID", "Nickname", "Key Type", "Sign Count", "Last Used"],
-        ),
         "refresh-tokens" => (
             &state.db.refresh_tokens_table,
             "Global",
@@ -224,76 +248,379 @@ async fn table_page(
         _ => return Err(AppError::NotFound),
     };
 
-    let mut req = state.db.inner
+    let current_page = q.page.unwrap_or(1).max(1);
+
+    let mut scan_req = state.db.inner
         .scan()
         .table_name(ddb_table)
         .limit(PAGE_SIZE);
 
     if let Some(ref cursor) = q.cursor {
-        req = req.set_exclusive_start_key(Some(decode_browse_cursor(cursor)?));
+        scan_req = scan_req.set_exclusive_start_key(Some(decode_browse_cursor(cursor)?));
     }
 
-    let resp = req.send().await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    let (scan_resp, describe_resp) = tokio::join!(
+        scan_req.send(),
+        state.db.inner.describe_table().table_name(ddb_table).send(),
+    );
 
-    let next_cursor = resp.last_evaluated_key
+    let scan_resp = scan_resp.map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+
+    let approx_total = describe_resp.ok()
+        .and_then(|r| r.table)
+        .and_then(|t| t.item_count)
+        .unwrap_or(0);
+
+    let next_cursor = scan_resp.last_evaluated_key
         .map(|k| encode_browse_cursor(&k))
         .transpose()
         .map_err(|e: anyhow::Error| AppError::Internal(e))?;
 
-    let items = resp.items.unwrap_or_default();
+    let items = scan_resp.items.unwrap_or_default();
     let item_count = items.len();
 
-    let mut rows: Vec<TableRow> = Vec::with_capacity(items.len());
-    for item in &items {
-        let cells = match slug.as_str() {
-            "users" => row_user(item),
-            "credentials" => row_credential(item),
-            "refresh-tokens" => row_refresh_token(item),
-            "challenges" => row_challenge(item),
-            "email-tokens" => row_email_token(item),
-            "oauth-devices" => row_oauth_device(item),
-            _ => vec![],
-        };
-
-        let detail = if slug.as_str() == "users" {
-            let uuid = val_s(item, "user_id");
-            let creds_resp = state.db.inner
-                .query()
-                .table_name(&state.db.credentials_table)
-                .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
-                .expression_attribute_values(":pk", AttributeValue::S(format!("USER#{uuid}")))
-                .expression_attribute_values(":prefix", AttributeValue::S("CRED#".into()))
-                .send()
-                .await
-                .ok()
-                .and_then(|r| r.items)
-                .unwrap_or_default();
-            let credential_rows: Vec<Vec<String>> = creds_resp
-                .iter()
-                .map(|c| row_credential_detail(c))
-                .collect();
-            Some(UserDetail { uuid, credential_rows })
-        } else {
-            None
-        };
-
-        rows.push(TableRow { cells, detail });
-    }
-
-    let has_details = slug.as_str() == "users";
+    let rows: Vec<TableRow> = items.iter().map(|item| {
+        TableRow {
+            cells: match slug.as_str() {
+                "refresh-tokens" => row_refresh_token(item),
+                "challenges" => row_challenge(item),
+                "email-tokens" => row_email_token(item),
+                "oauth-devices" => row_oauth_device(item),
+                _ => vec![],
+            },
+        }
+    }).collect();
 
     Ok(Html(AdminTableTemplate {
         nav: NavUser { email: claims.email.clone(), is_admin: true },
         table_name: ddb_table.to_string(),
+        active_table: slug.clone(),
         table_slug: slug,
         scope,
-        has_details,
         headers,
         rows,
         next_cursor,
         item_count,
+        current_page,
+        approx_total,
+        active_section: "tables",
     }.render().map_err(|e| anyhow::anyhow!(e))?))
+}
+
+// ── Admin users list ──────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct UsersQuery {
+    q: Option<String>,
+    role: Option<String>,
+    status: Option<String>,
+    cursor: Option<String>,
+}
+
+struct UserRow {
+    id: String,
+    email: String,
+    display_name: String,
+    role: String,
+    status: String,
+    credential_count: usize,
+    created_at: String,
+}
+
+#[derive(Template)]
+#[template(path = "admin-users.html")]
+#[allow(dead_code)]
+struct AdminUsersPage {
+    nav: NavUser,
+    users: Vec<UserRow>,
+    query: String,
+    role_filter: String,
+    status_filter: String,
+    is_filtered: bool,
+    next_cursor: Option<String>,
+    prev_cursor: Option<String>,
+    active_section: &'static str,
+    active_table: &'static str,
+}
+
+async fn admin_users_page(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    Query(q): Query<UsersQuery>,
+) -> Result<Html<String>, AppError> {
+    require_admin(&claims)?;
+
+    let email_query = q.q.as_deref().filter(|s| !s.is_empty());
+    let role_filter = q.role.as_deref()
+        .filter(|s| !s.is_empty())
+        .map(parse_role_filter)
+        .transpose()?;
+    let status_filter = q.status.as_deref()
+        .filter(|s| !s.is_empty())
+        .map(parse_status_filter)
+        .transpose()?;
+
+    let is_filtered = email_query.is_some() || role_filter.is_some() || status_filter.is_some();
+
+    let (raw_users, next_cursor) = UserRepository::new(state.db.clone())
+        .list(50, q.cursor.clone(), email_query, role_filter.as_ref(), status_filter.as_ref())
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    let cred_repo = CredentialRepository::new(state.db.clone());
+    let mut users = Vec::with_capacity(raw_users.len());
+    for u in raw_users {
+        let cred_count = cred_repo.list_for_user(&u.id).await.map(|v| v.len()).unwrap_or(0);
+        users.push(UserRow {
+            id: u.id.to_string(),
+            email: u.email,
+            display_name: u.display_name,
+            role: format_role(&u.role),
+            status: format_status(&u.status),
+            credential_count: cred_count,
+            created_at: trunc(&u.created_at.to_string(), 16),
+        });
+    }
+
+    Ok(Html(AdminUsersPage {
+        nav: NavUser { email: claims.email.clone(), is_admin: true },
+        users,
+        query: q.q.unwrap_or_default(),
+        role_filter: q.role.unwrap_or_default(),
+        status_filter: q.status.unwrap_or_default(),
+        is_filtered,
+        next_cursor,
+        prev_cursor: None, // DynamoDB scan cursors are forward-only
+        active_section: "users",
+        active_table: "",
+    }.render().map_err(|e| anyhow::anyhow!(e))?))
+}
+
+fn parse_role_filter(s: &str) -> Result<domain::user::Role, AppError> {
+    match s {
+        "free" => Ok(domain::user::Role::Free),
+        "member" => Ok(domain::user::Role::Member),
+        "administrator" => Ok(domain::user::Role::Administrator),
+        other => Err(AppError::BadRequest(format!("unknown role: {other}"))),
+    }
+}
+
+fn parse_status_filter(s: &str) -> Result<domain::user::UserStatus, AppError> {
+    match s {
+        "active" => Ok(domain::user::UserStatus::Active),
+        "suspended" => Ok(domain::user::UserStatus::Suspended),
+        "pending_verification" => Ok(domain::user::UserStatus::PendingVerification),
+        other => Err(AppError::BadRequest(format!("unknown status: {other}"))),
+    }
+}
+
+fn format_role(role: &domain::user::Role) -> String {
+    match role {
+        domain::user::Role::Free => "free".into(),
+        domain::user::Role::Member => "member".into(),
+        domain::user::Role::Administrator => "administrator".into(),
+    }
+}
+
+fn format_status(status: &domain::user::UserStatus) -> String {
+    match status {
+        domain::user::UserStatus::Active => "active".into(),
+        domain::user::UserStatus::Suspended => "suspended".into(),
+        domain::user::UserStatus::PendingVerification => "pending_verification".into(),
+    }
+}
+
+// ── Admin user detail ─────────────────────────────────────────────────────────
+
+struct AdminCredRow {
+    nickname: String,
+    key_type: String,
+    sign_count: String,
+    last_used_at: String,
+    created_at: String,
+}
+
+#[derive(Template)]
+#[template(path = "admin-user-detail.html")]
+#[allow(dead_code)]
+struct AdminUserDetailPage {
+    nav: NavUser,
+    user_id: String,
+    user_email: String,
+    display_name: String,
+    role: String,
+    status: String,
+    created_at: String,
+    active_session_count: usize,
+    credentials: Vec<AdminCredRow>,
+    active_section: &'static str,
+    active_table: &'static str,
+}
+
+async fn admin_user_detail_page(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Html<String>, AppError> {
+    require_admin(&claims)?;
+
+    let user_uuid = uuid::Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid user id".into()))?;
+    let user_id = UserId(user_uuid);
+
+    let user_repo = UserRepository::new(state.db.clone());
+    let cred_repo = CredentialRepository::new(state.db.clone());
+    let token_repo = RefreshTokenRepository::new(state.db.clone());
+
+    let (user, raw_creds, sessions) = tokio::try_join!(
+        user_repo.get(&user_id),
+        cred_repo.list_for_user(&user_id),
+        token_repo.list_for_user(&user_id),
+    ).map_err(|e: db::error::DbError| match e {
+        db::error::DbError::NotFound => AppError::NotFound,
+        other => AppError::Internal(other.into()),
+    })?;
+
+    let credentials = raw_creds.into_iter().map(|c| AdminCredRow {
+        nickname: c.nickname.unwrap_or_else(|| "Unnamed passkey".into()),
+        key_type: aaguid_display(&c.aaguid.to_string()),
+        sign_count: c.sign_count.to_string(),
+        last_used_at: fmt_dt_short(c.last_used_at),
+        created_at: fmt_dt_short(c.created_at),
+    }).collect();
+
+    Ok(Html(AdminUserDetailPage {
+        nav: NavUser { email: claims.email.clone(), is_admin: true },
+        user_id: user.id.to_string(),
+        user_email: user.email,
+        display_name: user.display_name,
+        role: format_role(&user.role),
+        status: format_status(&user.status),
+        created_at: fmt_dt_short(user.created_at),
+        active_session_count: sessions.len(),
+        credentials,
+        active_section: "users",
+        active_table: "",
+    }.render().map_err(|e| anyhow::anyhow!(e))?))
+}
+
+fn fmt_dt_short(dt: time::OffsetDateTime) -> String {
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02} UTC",
+        dt.year(), dt.month() as u8, dt.day(), dt.hour(), dt.minute()
+    )
+}
+
+// ── Admin user actions ────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct SetStatusRequest {
+    status: String,
+}
+
+async fn admin_user_set_status(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<String>,
+    axum::Json(req): axum::Json<SetStatusRequest>,
+) -> Result<axum::http::StatusCode, AppError> {
+    require_admin(&claims)?;
+
+    let user_uuid = uuid::Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid user id".into()))?;
+    let user_id = UserId(user_uuid);
+
+    let new_status = parse_status_filter(&req.status)?;
+
+    UserRepository::new(state.db.clone())
+        .update_status(&user_id, &new_status)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    // Revoke all sessions when suspending.
+    if new_status == domain::user::UserStatus::Suspended {
+        RefreshTokenRepository::new(state.db.clone())
+            .revoke_all_for_user(&user_id)
+            .await
+            .map_err(|e| AppError::Internal(e.into()))?;
+    }
+
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+async fn admin_delete_user(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<String>,
+) -> Result<axum::http::StatusCode, AppError> {
+    require_admin(&claims)?;
+
+    let user_uuid = uuid::Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid user id".into()))?;
+    let user_id = UserId(user_uuid);
+
+    // Revoke sessions → delete credentials → delete user.
+    RefreshTokenRepository::new(state.db.clone())
+        .revoke_all_for_user(&user_id)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    CredentialRepository::new(state.db.clone())
+        .delete_all_for_user(&user_id)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    UserRepository::new(state.db.clone())
+        .delete(&user_id)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    tracing::info!(admin = %claims.email, deleted_user = %user_id, "admin deleted user");
+
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+#[derive(Serialize)]
+struct ResetPasskeyResponse {
+    recovery_url: String,
+}
+
+const RECOVERY_TOKEN_TTL_SECS: i64 = 86_400; // 24 hours
+
+async fn admin_reset_passkey(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<String>,
+) -> Result<axum::Json<ResetPasskeyResponse>, AppError> {
+    require_admin(&claims)?;
+
+    let user_uuid = uuid::Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid user id".into()))?;
+    let user_id = UserId(user_uuid);
+
+    // Verify user exists before issuing a token.
+    UserRepository::new(state.db.clone())
+        .get(&user_id)
+        .await
+        .map_err(|e| match e {
+            db::error::DbError::NotFound => AppError::NotFound,
+            other => AppError::Internal(other.into()),
+        })?;
+
+    let expires_at = OffsetDateTime::now_utc().unix_timestamp() + RECOVERY_TOKEN_TTL_SECS;
+    let token = Challenge::new_passkey_recovery(user_id.to_string(), expires_at);
+    let token_id = token.id.clone();
+
+    ChallengeRepository::new(state.db.clone())
+        .put(&token)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    let recovery_url = format!("{}/recover?token={}", state.base_url, token_id);
+
+    tracing::info!(admin = %claims.email, target_user = %user_id, "admin issued passkey recovery token");
+
+    Ok(axum::Json(ResetPasskeyResponse { recovery_url }))
 }
 
 // ── Row mappers ───────────────────────────────────────────────────────────────
@@ -378,82 +705,58 @@ fn aaguid_display(aaguid: &str) -> String {
     }
 }
 
-fn row_user(item: &DdbItem) -> Vec<String> {
-    let user_id = val_s(item, "user_id");
-    vec![
-        user_id,
-        val_s(item, "email"),
-        val_s(item, "display_name"),
-        title_case(&val_s(item, "role")),
-        title_case(&val_s(item, "status")),
-        trunc(&val_s(item, "created_at"), 19), // drop sub-second + tz
-    ]
+fn user_cell(user_id: &str) -> TableCell {
+    if user_id == "—" || user_id.is_empty() {
+        TableCell::plain(user_id)
+    } else {
+        TableCell::linked(trunc(user_id, 8), format!("/admin/users/{user_id}"))
+    }
 }
 
-fn row_credential(item: &DdbItem) -> Vec<String> {
-    let user_id = val_s(item, "user_id");
-    let aaguid = val_s(item, "aaguid");
-    vec![
-        trunc(&user_id, 8),
-        val_s(item, "nickname"),
-        aaguid_display(&aaguid),
-        val_n(item, "sign_count"),
-        trunc(&val_s(item, "last_used_at"), 19),
-    ]
-}
-
-fn row_credential_detail(item: &DdbItem) -> Vec<String> {
-    let aaguid = val_s(item, "aaguid");
-    vec![
-        val_s(item, "nickname"),
-        aaguid_display(&aaguid),
-        val_n(item, "sign_count"),
-        trunc(&val_s(item, "last_used_at"), 19),
-    ]
-}
-
-fn row_refresh_token(item: &DdbItem) -> Vec<String> {
+fn row_refresh_token(item: &DdbItem) -> Vec<TableCell> {
     let jti = val_s(item, "jti");
     let user_id = val_s(item, "user_id");
     let expires_n = val_n(item, "expires_at");
     vec![
-        trunc(&jti, 8),
-        trunc(&user_id, 8),
-        fmt_unix(&expires_n),
-        val_bool(item, "revoked"),
+        TableCell::plain(trunc(&jti, 8)),
+        user_cell(&user_id),
+        TableCell::plain(fmt_unix(&expires_n)),
+        TableCell::plain(val_bool(item, "revoked")),
     ]
 }
 
-fn row_challenge(item: &DdbItem) -> Vec<String> {
+fn row_challenge(item: &DdbItem) -> Vec<TableCell> {
     let pk_val = val_s(item, "pk");
     let id = pk_val.strip_prefix("CHALLENGE#").unwrap_or(&pk_val);
+    let user_id = val_s(item, "user_id");
     let expires_n = val_n(item, "expires_at");
     vec![
-        trunc(id, 8),
-        title_case(&val_s(item, "challenge_type")),
-        val_s(item, "user_id"),
-        fmt_unix(&expires_n),
+        TableCell::plain(trunc(id, 8)),
+        TableCell::plain(title_case(&val_s(item, "challenge_type"))),
+        user_cell(&user_id),
+        TableCell::plain(fmt_unix(&expires_n)),
     ]
 }
 
-fn row_email_token(item: &DdbItem) -> Vec<String> {
+fn row_email_token(item: &DdbItem) -> Vec<TableCell> {
     let pk_val = val_s(item, "pk");
     let id = pk_val.strip_prefix("EMAIL_TOKEN#").unwrap_or(&pk_val);
     let expires_n = val_n(item, "expires_at");
     vec![
-        trunc(id, 8),
-        val_s(item, "email"),
-        fmt_unix(&expires_n),
+        TableCell::plain(trunc(id, 8)),
+        TableCell::plain(val_s(item, "email")),
+        TableCell::plain(fmt_unix(&expires_n)),
     ]
 }
 
-fn row_oauth_device(item: &DdbItem) -> Vec<String> {
+fn row_oauth_device(item: &DdbItem) -> Vec<TableCell> {
+    let user_id = val_s(item, "user_id");
     let expires_n = val_n(item, "expires_at");
     vec![
-        val_s(item, "user_code"),
-        title_case(&val_s(item, "status")),
-        val_s(item, "user_id"),
-        fmt_unix(&expires_n),
+        TableCell::plain(val_s(item, "user_code")),
+        TableCell::plain(title_case(&val_s(item, "status"))),
+        user_cell(&user_id),
+        TableCell::plain(fmt_unix(&expires_n)),
     ]
 }
 

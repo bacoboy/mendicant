@@ -94,12 +94,48 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "role"
+    type = "S"
+  }
+
+  # Exact email lookup (existing — used by get_by_email)
   global_secondary_index {
     name            = "email-index"
     projection_type = "ALL"
     key_schema {
       attribute_name = "email"
       key_type       = "HASH"
+    }
+  }
+
+  # Admin list/search: pk=sk("PROFILE"), sk=email — enables begins_with prefix search
+  # and replaces full-table scans for unfiltered pagination.
+  global_secondary_index {
+    name            = "sk-email-index"
+    projection_type = "ALL"
+    key_schema {
+      attribute_name = "sk"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "email"
+      key_type       = "RANGE"
+    }
+  }
+
+  # Admin role filter: pk=role, sk=email — enables efficient Query by role
+  # with optional begins_with on email sort key.
+  global_secondary_index {
+    name            = "role-index"
+    projection_type = "ALL"
+    key_schema {
+      attribute_name = "role"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "email"
+      key_type       = "RANGE"
     }
   }
 
