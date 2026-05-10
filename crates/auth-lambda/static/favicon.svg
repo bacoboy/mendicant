@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="4" fill="#1e1e2e"/>
+  <!-- lowercase m: left leg, two arches, center and right legs -->
+  <rect x="5"  y="13" width="4" height="13" rx="1" fill="#cba6f7"/>
+  <rect x="5"  y="11" width="10" height="4" rx="1" fill="#cba6f7"/>
+  <rect x="13" y="13" width="4" height="13" rx="1" fill="#cba6f7"/>
+  <rect x="13" y="11" width="10" height="4" rx="1" fill="#cba6f7"/>
+  <rect x="23" y="13" width="4" height="13" rx="1" fill="#cba6f7"/>
+</svg>
