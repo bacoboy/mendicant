@@ -1,6 +1,6 @@
 # Project Progress
 
-Last updated: 2026-05-04
+Last updated: 2026-05-10
 
 ## Current State
 
@@ -51,6 +51,16 @@ Ready for: SES integration and Terraform deployment work.
 - `handlers/profile.rs` — `GET`/`PATCH /me`
 - `handlers/admin.rs` — `GET`/`PATCH`/`DELETE /admin/users/:id`
 
+### Session 5 — Token refresh + UI polish (2026-05-10)
+- `POST /auth/refresh` endpoint with refresh token rotation (revoke old JTI, issue new pair)
+- Three-cookie strategy: `auth` (HttpOnly 15min), `auth_exp` (JS-readable 15min), `refresh_token` (HttpOnly 30 days)
+- Silent refresh JS in `base.html` — schedules `doRefresh()` 60s before `auth_exp`, clears cookie and redirects on failure
+- Logout clears all three cookies
+- Removed `role` field from `RefreshToken` domain type, DB layer, and admin table UI
+- Profile page widened (`page-wide`), passkey rename buttons stacked vertically
+- Nav user email styled in teal to distinguish from admin/logout links
+- `docker-compose.yml`: `NO_PROXY` added to all services to bypass OrbStack's HTTP proxy for inter-container calls
+
 ### Admin features
 - `GET /admin` — dashboard with DynamoDB table stats
 - `GET /admin/tables/{slug}` — paginated table browser
@@ -63,7 +73,7 @@ Ready for: SES integration and Terraform deployment work.
 
 3. **Terraform: env vars** — Lambda env vars must include `RP_ID`, `RP_ORIGIN`, `BASE_URL` in addition to table names and KMS key ID. Verify Lambda IAM role has `kms:Sign` + `kms:GetPublicKey`.
 
-4. **Token refresh flow** — no `/oauth/refresh` endpoint yet. Refresh tokens stored in DynamoDB but no exchange endpoint.
+4. ~~**Token refresh flow**~~ — **Done.** `POST /auth/refresh` rotates refresh token on use. Three-cookie strategy: `auth` (HttpOnly, 15min), `auth_exp` (JS-readable, 15min), `refresh_token` (HttpOnly, 30 days). Silent refresh fires 60s before expiry via `setTimeout` in `base.html`. Logout clears all three cookies.
 
 5. **Refresh token in CLI** — device_token response returns `refresh_token` (currently the jti string, not a full JWT).
 
