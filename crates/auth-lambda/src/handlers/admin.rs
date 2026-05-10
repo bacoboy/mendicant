@@ -20,6 +20,7 @@ use domain::credential::{Credential, CredentialId};
 use domain::user::{Role, UserId};
 
 use crate::error::AppError;
+use crate::handlers::NavUser;
 use crate::jwt::issue_tokens;
 use crate::middleware::AuthUser;
 use crate::sse::SseResponse;
@@ -67,7 +68,9 @@ pub struct TableInfo {
 
 #[derive(Template)]
 #[template(path = "admin.html")]
+#[allow(dead_code)]
 struct AdminPage {
+    nav: NavUser,
     tables: Vec<TableInfo>,
 }
 
@@ -136,7 +139,10 @@ async fn admin_page(
     }
 
     Ok(Html(
-        AdminPage { tables }.render().map_err(|e| anyhow::anyhow!(e))?,
+        AdminPage {
+            nav: NavUser { email: claims.email.clone(), is_admin: true },
+            tables,
+        }.render().map_err(|e| anyhow::anyhow!(e))?,
     ))
 }
 
@@ -161,7 +167,9 @@ struct TableRow {
 
 #[derive(Template)]
 #[template(path = "admin-table.html")]
+#[allow(dead_code)]
 struct AdminTableTemplate {
+    nav: NavUser,
     table_name: String,
     table_slug: String,
     scope: &'static str,
@@ -276,6 +284,7 @@ async fn table_page(
     let has_details = slug.as_str() == "users";
 
     Ok(Html(AdminTableTemplate {
+        nav: NavUser { email: claims.email.clone(), is_admin: true },
         table_name: ddb_table.to_string(),
         table_slug: slug,
         scope,

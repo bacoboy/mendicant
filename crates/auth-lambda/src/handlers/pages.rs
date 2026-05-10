@@ -13,6 +13,7 @@ use db::users::UserRepository;
 use domain::user::UserId;
 
 use crate::error::AppError;
+use crate::handlers::NavUser;
 use crate::middleware::AuthUser;
 use crate::state::AppState;
 
@@ -61,6 +62,7 @@ struct CredentialRow {
 #[template(path = "profile.html")]
 #[allow(dead_code)]
 struct ProfilePage {
+    nav: NavUser,
     id: String,
     email: String,
     display_name: String,
@@ -136,6 +138,10 @@ async fn profile_page(
         .unwrap_or_default();
 
     let page = ProfilePage {
+        nav: NavUser {
+            email: claims.email.clone(),
+            is_admin: claims.role == domain::user::Role::Administrator,
+        },
         id: user.id.to_string(),
         email: user.email,
         display_name: user.display_name,

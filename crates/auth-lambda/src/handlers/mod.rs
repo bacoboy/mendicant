@@ -2,6 +2,12 @@ use axum::Router;
 
 use crate::state::AppState;
 
+#[allow(dead_code)]
+pub(crate) struct NavUser {
+    pub email: String,
+    pub is_admin: bool,
+}
+
 mod admin;
 mod auth;
 mod credentials;

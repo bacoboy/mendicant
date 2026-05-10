@@ -1,83 +1,57 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Profile – Mendicant</title>
-  <style>
-    [hidden] { display: none !important; }
-    body { font-family: system-ui, sans-serif; max-width: 560px; margin: 5vh auto; padding: 1rem; }
-    h1 { font-size: 1.5rem; margin-bottom: 2rem; }
-    h2 { font-size: 1.1rem; margin: 0 0 1rem; }
-    .error-alert { background: #fee; color: #c00; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; border: 1px solid #fcc; display: none; }
-    .error-alert.show { display: block; }
-    .profile-section { background: #f5f5f5; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; }
-    .profile-field { margin-bottom: 1rem; }
-    .profile-label { font-size: .9rem; color: #555; margin-bottom: .25rem; }
-    .profile-value { font-size: 1rem; word-break: break-word; }
-    .profile-value.monospace { font-family: monospace; font-size: .9rem; }
-    /* Passkey table */
-    .passkey-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: .9rem; }
-    .passkey-table th { text-align: left; padding: .4rem .6rem; font-size: .8rem; color: #555; border-bottom: 2px solid #ddd; white-space: nowrap; }
-    .passkey-table td { padding: .55rem .6rem; border-bottom: 1px solid #eee; vertical-align: middle; }
-    .passkey-table tr:last-child td { border-bottom: none; }
-    .passkey-nickname { font-weight: 500; }
-    .passkey-meta { font-size: .78rem; color: #888; }
-    .passkey-edit { display: flex; gap: .4rem; align-items: center; }
-    .passkey-edit input { flex: 1; padding: .3rem .45rem; font-size: .88rem; border: 1px solid #ccc; border-radius: 4px; min-width: 0; }
-    td.actions { white-space: nowrap; text-align: right; }
-    button { padding: .4rem .85rem; font-size: .9rem; border: none; border-radius: 4px; cursor: pointer; }
-    .btn-primary { background: #0070f3; color: #fff; }
-    .btn-primary:hover { background: #0051a2; }
-    .btn-secondary { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
-    .btn-secondary:hover { background: #e0e0e0; }
-    .btn-danger { background: #fff0f0; color: #c00; border: 1px solid #fcc; }
-    .btn-danger:hover { background: #ffe0e0; }
-    .btn-sm { padding: .3rem .65rem; font-size: .82rem; }
-    .button-group { display: flex; gap: 1rem; }
-    .links { margin-top: 2rem; text-align: center; font-size: .9rem; }
-    .links a { margin: 0 .5rem; color: #0070f3; text-decoration: none; }
-    .links a:hover { text-decoration: underline; }
-  </style>
-</head>
-<body>
-  <h1>Your Profile</h1>
+{% extends "base.html" %}
 
-  <div id="error-alert" class="error-alert"></div>
+{% block title %}profile – mendicant{% endblock %}
 
-  <div class="profile-section">
-    <div class="profile-field">
-      <div class="profile-label">Name</div>
-      <div class="profile-value">{{ display_name }}</div>
-    </div>
-    <div class="profile-field">
-      <div class="profile-label">Email</div>
-      <div class="profile-value">{{ email }}</div>
-    </div>
-    <div class="profile-field">
-      <div class="profile-label">Role</div>
-      <div class="profile-value">{{ role }}</div>
-    </div>
-    <div class="profile-field">
-      <div class="profile-label">Status</div>
-      <div class="profile-value">{{ status }}</div>
-    </div>
-    <div class="profile-field">
-      <div class="profile-label">User ID</div>
-      <div class="profile-value monospace">{{ id }}</div>
+{% block page_class %}{% endblock %}
+
+{% block nav_right %}
+  {% if nav.is_admin %}<a href="/admin">admin</a>{% endif %}
+  <a href="/me">{{ nav.email }}</a>
+  <form method="POST" action="/logout" style="display:contents;">
+    <button type="submit" class="topnav-logout">logout</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <h1>profile</h1>
+
+  <div id="error-alert" class="error-banner" style="display:none;"></div>
+
+  <div class="card">
+    <div style="display:grid;gap:0.75rem;">
+      <div>
+        <div class="muted">name</div>
+        <div>{{ display_name }}</div>
+      </div>
+      <div>
+        <div class="muted">email</div>
+        <div>{{ email }}</div>
+      </div>
+      <div>
+        <div class="muted">role</div>
+        <div>{{ role }}</div>
+      </div>
+      <div>
+        <div class="muted">status</div>
+        <div>{{ status }}</div>
+      </div>
+      <div>
+        <div class="muted">user id</div>
+        <div>{{ id }}</div>
+      </div>
     </div>
   </div>
 
-  <h2>Passkeys</h2>
+  <h2>passkeys</h2>
   {% if credentials.is_empty() %}
-  <p style="color:#888;font-size:.9rem;margin-bottom:1.5rem;">No passkeys registered.</p>
+  <p class="muted" style="margin-bottom:1.5rem;">no passkeys registered.</p>
   {% else %}
-  <table class="passkey-table">
+  <table style="margin-bottom:1.5rem;">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Added</th>
-        <th>Last used</th>
+        <th>name</th>
+        <th>added</th>
+        <th>last used</th>
         <th></th>
       </tr>
     </thead>
@@ -86,19 +60,20 @@
     <tr data-cred-id="{{ cred.id }}">
       <td>
         <div class="passkey-nickname">{{ cred.nickname }}</div>
-        <div class="passkey-edit" hidden>
-          <input type="text" class="passkey-input" value="{{ cred.nickname }}" maxlength="64">
-          <button class="btn-secondary btn-sm" onclick="saveNickname(this)">Save</button>
-          <button class="btn-secondary btn-sm" onclick="cancelEdit(this)">Cancel</button>
+        <div class="passkey-edit" hidden style="display:flex;gap:0.4rem;align-items:center;">
+          <input type="text" class="passkey-input" value="{{ cred.nickname }}"
+                 maxlength="64" style="margin-bottom:0;flex:1;min-width:0;">
+          <button class="btn btn-secondary btn-sm" onclick="saveNickname(this)">save</button>
+          <button class="btn btn-secondary btn-sm" onclick="cancelEdit(this)">cancel</button>
         </div>
       </td>
-      <td class="passkey-meta">{{ cred.created_at }}</td>
-      <td class="passkey-meta">{{ cred.last_used_at }}</td>
-      <td class="actions">
+      <td class="muted">{{ cred.created_at }}</td>
+      <td class="muted">{{ cred.last_used_at }}</td>
+      <td style="white-space:nowrap;text-align:right;">
         <div class="passkey-actions">
-          <button class="btn-secondary btn-sm" onclick="startEdit(this)">Rename</button>
+          <button class="btn btn-secondary btn-sm" onclick="startEdit(this)">rename</button>
           {% if cred.can_delete %}
-          <button class="btn-danger btn-sm" onclick="deleteKey(this)">Delete</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteKey(this)">delete</button>
           {% endif %}
         </div>
       </td>
@@ -109,40 +84,32 @@
   {% endif %}
 
   <div class="button-group">
-    <button class="btn-primary" onclick="addPasskey()" id="add-passkey-btn">Add Passkey</button>
-    <form method="POST" action="/logout" style="display: inline;">
-      <button type="submit" class="btn-secondary">Sign Out</button>
-    </form>
+    <button class="btn btn-primary" onclick="addPasskey()" id="add-passkey-btn">add passkey</button>
   </div>
 
-  <div class="links">
-    <a href="/">Home</a>
-  </div>
-
-  <!-- Debug section (remove in production) -->
-  <div style="margin-top: 3rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: .85rem;">
-    <h3 style="margin-top: 0;">Debug Info (dev only)</h3>
-    <p><strong>JWT Claims:</strong></p>
-    <pre style="background: white; padding: .5rem; border-radius: 2px; overflow-x: auto; margin: .5rem 0;">sub: {{ debug_jwt_sub }}
+  <div class="debug-panel">
+    <h3>debug (dev only)</h3>
+    <div class="muted" style="margin-bottom:0.5rem;">jwt claims</div>
+    <pre>sub:   {{ debug_jwt_sub }}
 email: {{ debug_jwt_email }}
-role: {{ debug_jwt_role }}</pre>
-    <p><strong>Database User:</strong></p>
-    <pre style="background: white; padding: .5rem; border-radius: 2px; overflow-x: auto; margin: .5rem 0;">id: {{ id }}
-email: {{ email }}
+role:  {{ debug_jwt_role }}</pre>
+    <div class="muted" style="margin-bottom:0.5rem;">database user</div>
+    <pre>id:           {{ id }}
+email:        {{ email }}
 display_name: {{ display_name }}
-role: {{ role }}
-status: {{ status }}</pre>
+role:         {{ role }}
+status:       {{ status }}</pre>
   </div>
+{% endblock %}
 
+{% block scripts %}
   <script>
     function showError(message) {
-      const alert = document.getElementById('error-alert');
-      alert.textContent = message;
-      alert.classList.add('show');
-      setTimeout(() => alert.classList.remove('show'), 6000);
+      const el = document.getElementById('error-alert');
+      el.textContent = message;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 6000);
     }
-
-    // ── Passkey rename ────────────────────────────────────────────────────────
 
     function startEdit(btn) {
       const row = btn.closest('tr');
@@ -153,7 +120,7 @@ status: {{ status }}</pre>
       const input = edit.querySelector('input');
       input.focus();
       input.addEventListener('keydown', function onKey(e) {
-        if (e.key === 'Enter') { e.preventDefault(); saveNickname(input); }
+        if (e.key === 'Enter')  { e.preventDefault(); saveNickname(input); }
         if (e.key === 'Escape') { cancelEdit(input); input.removeEventListener('keydown', onKey); }
       });
     }
@@ -170,8 +137,7 @@ status: {{ status }}</pre>
       const credId = row.dataset.credId;
       const input = row.querySelector('.passkey-input');
       const nickname = input.value.trim();
-      if (!nickname) { showError('Nickname cannot be empty.'); return; }
-
+      if (!nickname) { showError('nickname cannot be empty.'); return; }
       btn.disabled = true;
       try {
         const resp = await fetch(`/auth/credentials/${credId}`, {
@@ -179,36 +145,30 @@ status: {{ status }}</pre>
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nickname }),
         });
-        if (!resp.ok) throw new Error(await resp.text() || 'Rename failed');
+        if (!resp.ok) throw new Error(await resp.text() || 'rename failed');
         row.querySelector('.passkey-nickname').textContent = nickname;
-        // Keep the input value in sync for a subsequent edit.
         cancelEdit(btn);
       } catch (e) {
-        showError('Rename failed: ' + e.message);
+        showError('rename failed: ' + e.message);
         btn.disabled = false;
       }
     }
-
-    // ── Passkey delete ────────────────────────────────────────────────────────
 
     async function deleteKey(btn) {
       const row = btn.closest('tr');
       const credId = row.dataset.credId;
       const nickname = row.querySelector('.passkey-nickname').textContent;
-      if (!confirm(`Delete passkey "${nickname}"?\n\nThis cannot be undone.`)) return;
-
+      if (!confirm(`delete passkey "${nickname}"?\n\nthis cannot be undone.`)) return;
       btn.disabled = true;
       try {
         const resp = await fetch(`/auth/credentials/${credId}`, { method: 'DELETE' });
-        if (!resp.ok) throw new Error(await resp.text() || 'Delete failed');
+        if (!resp.ok) throw new Error(await resp.text() || 'delete failed');
         window.location.reload();
       } catch (e) {
-        showError('Delete failed: ' + e.message);
+        showError('delete failed: ' + e.message);
         btn.disabled = false;
       }
     }
-
-    // ── Add passkey ───────────────────────────────────────────────────────────
 
     function b64urlToBytes(str) {
       const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -223,29 +183,25 @@ status: {{ status }}</pre>
       const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
       let b64 = '';
       const CHUNK = 0x8000;
-      for (let i = 0; i < bytes.length; i += CHUNK) {
+      for (let i = 0; i < bytes.length; i += CHUNK)
         b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-      }
       return btoa(b64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     }
 
     async function addPasskey() {
       const btn = document.getElementById('add-passkey-btn');
-      document.getElementById('error-alert').classList.remove('show');
+      document.getElementById('error-alert').style.display = 'none';
       btn.disabled = true;
-      btn.textContent = 'Adding passkey...';
-
+      btn.textContent = 'adding passkey...';
       try {
         const beginResp = await fetch('/auth/passkey/add/begin', { method: 'POST' });
-        if (!beginResp.ok) throw new Error('Failed to start registration');
-
+        if (!beginResp.ok) throw new Error('failed to start registration');
         const text = await beginResp.text();
         const match = text.match(/data: signals ({.*})/);
-        if (!match) throw new Error('Invalid challenge response');
+        if (!match) throw new Error('invalid challenge response');
         const signals = JSON.parse(match[1]);
         let options = signals.registerOptions;
         if (options.publicKey) options = options.publicKey;
-
         if (typeof options.challenge === 'string') options.challenge = b64urlToBytes(options.challenge);
         if (typeof options.user?.id === 'string') options.user.id = b64urlToBytes(options.user.id);
         if (options.excludeCredentials) {
@@ -260,10 +216,8 @@ status: {{ status }}</pre>
           }
           options.extensions = std;
         }
-
         const credential = await navigator.credentials.create({ publicKey: options });
-        if (!credential) throw new Error('Credential creation was cancelled');
-
+        if (!credential) throw new Error('credential creation was cancelled');
         const serialized = {
           id: credential.id,
           rawId: bytesToB64url(credential.rawId),
@@ -276,22 +230,20 @@ status: {{ status }}</pre>
             ...(credential.response.getTransports ? { transports: credential.response.getTransports() } : {}),
           },
         };
-
         const completeResp = await fetch('/auth/passkey/add/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ challenge_id: signals.challengeId, response: serialized }),
         });
-
         if (completeResp.ok) {
           window.location.reload();
         } else {
-          throw new Error(await completeResp.text() || 'Failed to register passkey');
+          throw new Error(await completeResp.text() || 'failed to register passkey');
         }
       } catch (e) {
-        showError('Failed to add passkey: ' + e.message);
+        showError('failed to add passkey: ' + e.message);
         btn.disabled = false;
-        btn.textContent = 'Add Passkey';
+        btn.textContent = 'add passkey';
       }
     }
   </script>
@@ -302,5 +254,4 @@ status: {{ status }}</pre>
       window.root = ds.root;
     }).catch(e => console.error('Failed to load Datastar:', e));
   </script>
-</body>
-</html>
+{% endblock %}

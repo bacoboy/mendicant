@@ -1,49 +1,36 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Enrollment – Mendicant</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 10vh auto; padding: 1rem; }
-    h1 { font-size: 1.5rem; margin-bottom: .25rem; }
-    .subtitle { color: #666; font-size: .9rem; margin-top: 0; margin-bottom: 1.5rem; }
-    .notice {
-      background: #fff8e1; border-left: 4px solid #f59e0b;
-      padding: .85rem 1rem; border-radius: 4px; margin-bottom: 1.5rem;
-      font-size: .9rem; line-height: 1.5;
-    }
-    button {
-      width: 100%; padding: .65rem; font-size: 1rem;
-      background: #1a1a1a; color: #fff;
-      border: none; border-radius: 4px; cursor: pointer;
-    }
-    button:hover { background: #333; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
-    .error { color: #c00; font-size: .9rem; margin-top: .75rem; }
-  </style>
-</head>
-<body>
-  <h1>Admin Enrollment</h1>
-  <p class="subtitle">Register your YubiKey as an administrator credential.</p>
+{% extends "base.html" %}
 
-  <script type="module">
-    // Extract token from URL before Datastar loads.
+{% block title %}admin enrollment – mendicant{% endblock %}
+
+{% block page_class %}page-slim{% endblock %}
+
+{% block pre_content %}
+  <script>
     const params = new URLSearchParams(window.location.search);
     window.__enrollToken = params.get('token') || '';
   </script>
+{% endblock %}
+
+{% block content %}
+  <h1>admin enrollment</h1>
+  <p class="muted" style="margin-bottom:1.5rem;">register your yubikey as an administrator credential.</p>
 
   <div data-signals='{"registerOptions":null,"challengeId":"","enrollError":""}'>
     <div class="notice">
-      Insert your YubiKey, then click <strong>Register YubiKey</strong>.<br>
-      You will be prompted to touch it. This link is single-use.
+      insert your yubikey, then click <strong>register yubikey</strong>.<br>
+      you will be prompted to touch it. this link is single-use.
     </div>
 
-    <button type="button" id="enroll-btn">Register YubiKey</button>
+    <button type="button" class="btn btn-primary full-width" id="enroll-btn">
+      register yubikey
+    </button>
 
-    <div data-show="$enrollError !== ''" class="error" data-text="$enrollError"></div>
+    <div data-show="$enrollError !== ''" class="error"
+         style="margin-top:0.75rem;" data-text="$enrollError"></div>
   </div>
+{% endblock %}
 
+{% block scripts %}
   <script type="module">
     import('/static/datastar.js').then(ds => {
       window.Datastar = ds;
@@ -54,5 +41,4 @@
     }).catch(e => console.error('[admin-enroll] Failed to load Datastar:', e));
   </script>
   <script type="module" src="/static/passkey-plugin.js"></script>
-</body>
-</html>
+{% endblock %}

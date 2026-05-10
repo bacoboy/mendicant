@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Mendicant{% endblock %}</title>
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+  {% block pre_content %}{% endblock %}
+  <nav class="topnav">
+    <div class="topnav-left">
+      <a href="/" class="topnav-brand">mendicant</a>
+    </div>
+    <div class="topnav-links">
+      {% block nav_right %}{% endblock %}
+    </div>
+  </nav>
+  <main class="page {% block page_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

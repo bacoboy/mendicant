@@ -57,6 +57,16 @@ The `bootstrap` CLI creates an admin user and stores a single-use `AdminEnrollme
 - `DELETE /auth/credentials/{id}` — delete a passkey. Returns 400 if last credential (lockout prevention). Auth required.
 - `/me` profile page: table of all credentials (nickname, date added, last used). Inline rename. Delete button hidden when only one credential remains.
 
+## UI / Theming
+
+All pages share a single stylesheet at `static/theme.css` (served via `GET /static/theme.css`, compiled into the binary with `include_str!`). The theme uses the **Catppuccin Mocha** palette and **Fira Code** (loaded from Google Fonts).
+
+Template inheritance via Askama:
+- `templates/base.html` — layout: always-visible top nav + `{% block content %}` / `{% block scripts %}`
+- All pages extend `base.html` and fill `{% block nav_right %}` with context-appropriate links
+- Authenticated pages (profile, admin, admin-table) carry a `NavUser { email, is_admin }` struct field populated from JWT claims; this drives the right-side nav (admin link shown only for admins)
+- Unauthenticated pages fill `nav_right` with static links (e.g. "sign in", "register") or leave it empty
+
 ## Admin Dashboard
 
 - `GET /admin` — Administrator-only. Calls `describe_table` for all 6 tables, shows status/count/size/billing mode.

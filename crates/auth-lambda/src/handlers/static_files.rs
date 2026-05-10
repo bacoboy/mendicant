@@ -9,6 +9,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/static/datastar.js", get(datastar_js))
         .route("/static/passkey-plugin.js", get(passkey_plugin_js))
+        .route("/static/theme.css", get(theme_css))
 }
 
 /// Serve the Datastar core library. The file is downloaded during build
@@ -26,5 +27,12 @@ async fn passkey_plugin_js() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
         include_str!("../../static/passkey-plugin.js"),
+    )
+}
+
+async fn theme_css() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        include_str!("../../static/theme.css"),
     )
 }

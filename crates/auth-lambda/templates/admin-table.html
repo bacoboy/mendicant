@@ -1,103 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ table_name }} – Admin – Mendicant</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 5vh auto; padding: 1rem; }
-    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; font-family: monospace; }
-    .subtitle { color: #666; font-size: 0.85rem; margin-bottom: 2rem; }
-    .section { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-    thead th {
-      text-align: left;
-      padding: 0.55rem 0.75rem;
-      background: #f5f5f5;
-      border-bottom: 2px solid #e0e0e0;
-      font-weight: 600;
-      color: #444;
-      white-space: nowrap;
-    }
-    tbody td {
-      padding: 0.55rem 0.75rem;
-      border-bottom: 1px solid #eee;
-      vertical-align: middle;
-      font-family: monospace;
-      font-size: 0.83rem;
-      max-width: 260px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover td { background: #fafafa; }
-    td[data-on-click] { cursor: pointer; user-select: none; }
-    td[data-on-click]:hover { background: #f0f0f0 !important; }
-    .expand-col { width: 2rem; text-align: center; }
-    .detail-row td { padding: 0; background: #f8f8f8; vertical-align: top; }
-    .detail-table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
-    .detail-table thead th { padding: 0.4rem 1rem; color: #666; font-weight: 600; text-align: left; background: #f8f8f8; border-bottom: 1px solid #ddd; }
-    .detail-table tbody td { padding: 0.35rem 0.75rem; font-family: monospace; border-top: 1px solid #eee; }
-    .detail-table tbody tr:hover td { background: #f0f0f0; }
-    .empty-detail { padding: 0.75rem 1rem; color: #999; font-size: 0.8rem; }
-    .empty { color: #999; text-align: center; padding: 2rem; font-family: system-ui; }
-    .pagination { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; font-size: 0.875rem; }
-    .pagination a {
-      display: inline-block;
-      padding: 0.4rem 1rem;
-      background: #0070f3;
-      color: #fff;
-      border-radius: 4px;
-      text-decoration: none;
-      font-size: 0.875rem;
-    }
-    .pagination a:hover { background: #0051a2; }
-    .count { color: #666; }
-    .badge {
-      display: inline-block;
-      padding: 0.15rem 0.45rem;
-      border-radius: 3px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      font-family: system-ui;
-    }
-    .badge-global { background: #e8f4fd; color: #0070c0; }
-    .badge-regional { background: #f0f0f0; color: #555; }
-    .nav { margin-bottom: 1.5rem; font-size: 0.875rem; color: #666; }
-    .nav a { color: #0070f3; text-decoration: none; }
-    .nav a:hover { text-decoration: underline; }
-  </style>
-  {% if has_details %}
-  <script type="module">
-    import('/static/datastar.js').then(ds => { window.Datastar = ds; window.root = ds.root; });
-  </script>
-  <script type="module" src="/static/passkey-plugin.js"></script>
-  {% endif %}
-</head>
-<body>
-  <div class="nav">
-    <a href="/admin">← Admin</a>
-  </div>
+{% extends "base.html" %}
+
+{% block title %}{{ table_name }} – admin – mendicant{% endblock %}
+
+{% block page_class %}page-full{% endblock %}
+
+{% block nav_right %}
+  <a href="/admin">admin</a>
+  <a href="/me">{{ nav.email }}</a>
+  <form method="POST" action="/logout" style="display:contents;">
+    <button type="submit" class="topnav-logout">logout</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  <div class="nav"><a href="/admin">← admin</a></div>
 
   <h1>{{ table_name }}</h1>
-  <p class="subtitle">
+  <p style="margin-bottom:1.5rem;">
     {% if scope == "Global" %}
-    <span class="badge badge-global">Global Table</span>
+    <span class="badge badge-global">global table</span>
     {% else %}
-    <span class="badge badge-regional">Regional Table</span>
+    <span class="badge badge-regional">regional table</span>
     {% endif %}
   </p>
 
-  <div class="section">
+  <div class="card" style="overflow-x:auto;">
     {% if rows.is_empty() %}
-    <p class="empty">No items found.</p>
+    <p class="muted text-center" style="padding:2rem 0;">no items found.</p>
     {% else %}
     <div {% if has_details %}data-signals='{"exp":""}'{% endif %}>
       <table>
         <thead>
           <tr>
-            {% if has_details %}<th class="expand-col"></th>{% endif %}
+            {% if has_details %}<th style="width:2rem;"></th>{% endif %}
             {% for h in headers %}
             <th>{{ h }}</th>
             {% endfor %}
@@ -108,30 +43,30 @@
           <tr>
             {% match row.detail %}
             {% when Some(detail) %}
-            <td class="expand-col"
+            <td style="text-align:center;cursor:pointer;user-select:none;"
                 data-on-click="$exp = $exp === '{{ detail.uuid }}' ? '' : '{{ detail.uuid }}'">
               <span data-text="$exp === '{{ detail.uuid }}' ? '▼' : '▶'">▶</span>
             </td>
             {% when None %}
             {% endmatch %}
             {% for cell in row.cells %}
-            <td title="{{ cell }}">{{ cell }}</td>
+            <td title="{{ cell }}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ cell }}</td>
             {% endfor %}
           </tr>
           {% match row.detail %}
           {% when Some(detail) %}
-          <tr class="detail-row" style="display:none" data-show="$exp === '{{ detail.uuid }}'">
-            <td colspan="{{ headers.len() + 1 }}">
+          <tr style="display:none;" data-show="$exp === '{{ detail.uuid }}'">
+            <td colspan="{{ headers.len() + 1 }}" style="padding:0;background:var(--mantle);">
               {% if detail.credential_rows.is_empty() %}
-              <p class="empty-detail">No credentials.</p>
+              <p class="muted" style="padding:0.75rem 1rem;">no credentials.</p>
               {% else %}
-              <table class="detail-table">
+              <table style="font-size:0.8rem;">
                 <thead>
                   <tr>
-                    <th>Nickname</th>
-                    <th>Key Type</th>
-                    <th>Sign Count</th>
-                    <th>Last Used</th>
+                    <th>nickname</th>
+                    <th>key type</th>
+                    <th>sign count</th>
+                    <th>last used</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -154,13 +89,23 @@
       </table>
     </div>
 
-    <div class="pagination">
-      <span class="count">Showing {{ item_count }} item{% if item_count != 1 %}s{% endif %}</span>
+    <div class="button-group" style="margin-top:1rem;">
+      <span class="muted">showing {{ item_count }} item{% if item_count != 1 %}s{% endif %}</span>
       {% if let Some(cursor) = next_cursor %}
-      <a href="/admin/tables/{{ table_slug }}?cursor={{ cursor }}">Next page →</a>
+      <a href="/admin/tables/{{ table_slug }}?cursor={{ cursor }}" class="btn btn-secondary btn-sm">
+        next page →
+      </a>
       {% endif %}
     </div>
     {% endif %}
   </div>
-</body>
-</html>
+{% endblock %}
+
+{% block scripts %}
+  {% if has_details %}
+  <script type="module">
+    import('/static/datastar.js').then(ds => { window.Datastar = ds; window.root = ds.root; });
+  </script>
+  <script type="module" src="/static/passkey-plugin.js"></script>
+  {% endif %}
+{% endblock %}
