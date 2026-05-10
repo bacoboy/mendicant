@@ -7,7 +7,7 @@
 {% block nav_right %}
   {% if nav.is_admin %}<a href="/admin">admin</a>{% endif %}
   <a href="/me" class="topnav-user">{{ nav.email }}</a>
-  <form method="POST" action="/logout" style="display:contents;">
+  <form method="POST" action="/auth/logout" style="display:contents;">
     <button type="submit" class="topnav-logout">logout</button>
   </form>
 {% endblock %}

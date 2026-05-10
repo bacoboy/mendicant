@@ -37,6 +37,7 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/login/begin", post(login_begin))
         .route("/auth/login/complete", post(login_complete))
         .route("/auth/refresh", post(token_refresh))
+        .route("/auth/logout", post(logout))
         .route("/auth/passkey/add/begin", post(add_passkey_begin))
         .route("/auth/passkey/add/complete", post(add_passkey_complete))
 }
@@ -695,6 +696,32 @@ async fn token_refresh(
         format!("auth_exp={exp}; SameSite=Strict; Path=/; Max-Age=900"),
         format!("refresh_token={}; HttpOnly{}; SameSite=Strict; Path=/; Max-Age=2592000", tokens.refresh_token_jti, secure_flag),
     ]))
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+
+/// POST /auth/logout — revoke the refresh token and clear all auth cookies.
+async fn logout(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
+    if let Some(jti) = extract_refresh_jti(&headers) {
+        let refresh_repo = RefreshTokenRepository::new(state.db.clone());
+        refresh_repo.revoke(&jti).await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    }
+
+    let secure = is_secure_context();
+    let secure_flag = if secure { "; Secure" } else { "" };
+    let response = axum::response::Response::builder()
+        .status(axum::http::StatusCode::SEE_OTHER)
+        .header(axum::http::header::LOCATION, "/")
+        .header(axum::http::header::SET_COOKIE, format!("auth=; HttpOnly{}; SameSite=Strict; Path=/; Max-Age=0", secure_flag))
+        .header(axum::http::header::SET_COOKIE, format!("auth_exp=; SameSite=Strict; Path=/; Max-Age=0"))
+        .header(axum::http::header::SET_COOKIE, format!("refresh_token=; HttpOnly{}; SameSite=Strict; Path=/; Max-Age=0", secure_flag))
+        .body(axum::body::Body::empty())
+        .unwrap();
+    Ok(response)
 }
 
 fn extract_refresh_jti(headers: &axum::http::HeaderMap) -> Option<String> {

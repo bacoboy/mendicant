@@ -34,13 +34,17 @@
         }
         return null;
       }
+      let refreshTimer = null;
       function scheduleRefresh() {
         const exp = parseInt(cookieVal('auth_exp') || '0', 10);
         if (!exp) return;
         const msUntilRefresh = (exp - 60) * 1000 - Date.now();
         if (msUntilRefresh <= 0) { doRefresh(); return; }
-        setTimeout(doRefresh, msUntilRefresh);
+        refreshTimer = setTimeout(doRefresh, msUntilRefresh);
       }
+      document.querySelectorAll('form[action="/auth/logout"]').forEach(function(form) {
+        form.addEventListener('submit', function() { clearTimeout(refreshTimer); });
+      });
       async function doRefresh() {
         try {
           const resp = await fetch('/auth/refresh', { method: 'POST', credentials: 'same-origin' });
