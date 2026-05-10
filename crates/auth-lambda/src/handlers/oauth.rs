@@ -153,6 +153,7 @@ async fn do_device_token(
                 &user.email,
                 &state.signer,
                 &RefreshTokenRepository::new(state.db.clone()),
+                Some("CLI".into()),
             )
             .await
             .map_err(|_| "server_error".to_string())?;

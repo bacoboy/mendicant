@@ -21,7 +21,7 @@ use domain::email_token::EmailToken;
 use domain::user::User;
 
 use crate::error::AppError;
-use crate::jwt::issue_tokens;
+use crate::jwt::{issue_tokens, parse_ua};
 use crate::middleware::AuthUser;
 use crate::sse::SseResponse;
 use crate::state::AppState;
@@ -40,6 +40,7 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/logout", post(logout))
         .route("/auth/passkey/add/begin", post(add_passkey_begin))
         .route("/auth/passkey/add/complete", post(add_passkey_complete))
+        .route("/auth/sessions/revoke-others", post(revoke_other_sessions))
 }
 
 // ── Email Validation ──────────────────────────────────────────────────────────
@@ -276,12 +277,14 @@ async fn register_complete(
         .await
         .context("failed to store credential")?;
 
+    let client_hint = ua_hint(&headers);
     let tokens = issue_tokens(
         &user.id,
         &user.role,
         &user.email,
         &state.signer,
         &RefreshTokenRepository::new(state.db.clone()),
+        client_hint,
     )
     .await?;
 
@@ -371,6 +374,7 @@ struct LoginCompleteRequest {
 /// In discovery mode, finds the user from the authenticated credential.
 async fn login_complete(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<LoginCompleteRequest>,
 ) -> Result<SseResponse, AppError> {
     tracing::info!("login_complete called with challenge_id: {}", req.challenge_id);
@@ -473,12 +477,14 @@ async fn login_complete(
         .await
         .context("failed to load user")?;
 
+    let client_hint = ua_hint(&headers);
     let tokens = issue_tokens(
         &user.id,
         &user.role,
         &user.email,
         &state.signer,
         &RefreshTokenRepository::new(state.db.clone()),
+        client_hint,
     )
     .await?;
 
@@ -681,7 +687,7 @@ async fn token_refresh(
     refresh_repo.revoke(&jti).await
         .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
 
-    let tokens = issue_tokens(&user.id, &user.role, &user.email, &state.signer, &refresh_repo)
+    let tokens = issue_tokens(&user.id, &user.role, &user.email, &state.signer, &refresh_repo, token.client_hint)
         .await
         .map_err(AppError::Internal)?;
 
@@ -724,6 +730,12 @@ async fn logout(
     Ok(response)
 }
 
+fn ua_hint(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers.get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(parse_ua)
+}
+
 fn extract_refresh_jti(headers: &axum::http::HeaderMap) -> Option<String> {
     let cookie_hdr = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
     for part in cookie_hdr.split(';') {
@@ -733,4 +745,34 @@ fn extract_refresh_jti(headers: &axum::http::HeaderMap) -> Option<String> {
         }
     }
     None
+}
+
+// ── Revoke other sessions ─────────────────────────────────────────────────────
+
+/// POST /auth/sessions/revoke-others — revoke all refresh tokens for the
+/// current user except the one belonging to this session.
+async fn revoke_other_sessions(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    headers: axum::http::HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
+    let current_jti = extract_refresh_jti(&headers);
+    let user_id = uuid::Uuid::parse_str(&claims.sub)
+        .map(domain::user::UserId)
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("malformed sub")))?;
+
+    let refresh_repo = RefreshTokenRepository::new(state.db.clone());
+    let tokens = refresh_repo.list_for_user(&user_id).await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    for token in tokens {
+        if current_jti.as_deref() == Some(&token.jti) {
+            continue;
+        }
+        if let Err(e) = refresh_repo.revoke(&token.jti).await {
+            tracing::warn!(jti = %token.jti, error = %e, "failed to revoke session");
+        }
+    }
+
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }

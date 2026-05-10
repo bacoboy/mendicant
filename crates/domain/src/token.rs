@@ -27,15 +27,19 @@ pub struct RefreshToken {
     /// Unix timestamp when this token expires (also the DynamoDB TTL value).
     pub expires_at: i64,
     pub revoked: bool,
+    /// Short human-readable label describing the client, e.g. "Safari · macOS".
+    /// None for tokens issued before this field was added.
+    pub client_hint: Option<String>,
 }
 
 impl RefreshToken {
-    pub fn new(user_id: UserId, expires_at: i64) -> Self {
+    pub fn new(user_id: UserId, expires_at: i64, client_hint: Option<String>) -> Self {
         Self {
             jti: Uuid::new_v4().to_string(),
             user_id,
             expires_at,
             revoked: false,
+            client_hint,
         }
     }
 }

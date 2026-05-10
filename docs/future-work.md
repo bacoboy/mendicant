@@ -31,6 +31,16 @@ Add `email_tokens` table to `infrastructure/infra/modules/regional`:
 - TTL attribute on `expires_at`
 - Add `TABLE_EMAIL_TOKENS` env var to Lambda configuration in `infrastructure/app`
 
+## Admin User Management (Left-Nav Redesign)
+
+Reorganize the admin section with left-side navigation (mirroring the profile page redesign):
+
+- **Users section** — paginated list of all users with search/filter by email, name, role, status
+- **Per-user actions** — force re-authentication (revoke all refresh tokens), suspend/unsuspend, role changes
+- **Force re-auth** — calls `revoke_all_for_user` for the target user and clears their sessions; user is redirected to login on next request
+
+Details TBD when we get to this.
+
 ## Local Dev Email Testing
 
 Without SES configured:

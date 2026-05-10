@@ -21,7 +21,7 @@ use domain::user::{Role, UserId};
 
 use crate::error::AppError;
 use crate::handlers::NavUser;
-use crate::jwt::issue_tokens;
+use crate::jwt::{issue_tokens, parse_ua};
 use crate::middleware::AuthUser;
 use crate::sse::SseResponse;
 use crate::state::AppState;
@@ -723,12 +723,16 @@ async fn enroll_complete(
         .await
         .context("failed to store admin credential")?;
 
+    let client_hint = headers.get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(parse_ua);
     let tokens = issue_tokens(
         &user_id,
         &user.role,
         &user.email,
         &state.signer,
         &RefreshTokenRepository::new(state.db.clone()),
+        client_hint,
     )
     .await?;
 

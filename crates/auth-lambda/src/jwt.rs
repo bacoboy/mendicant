@@ -25,6 +25,7 @@ pub async fn issue_tokens(
     email: &str,
     signer: &Signer,
     refresh_repo: &RefreshTokenRepository,
+    client_hint: Option<String>,
 ) -> Result<IssuedTokens> {
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
@@ -43,6 +44,7 @@ pub async fn issue_tokens(
     let refresh = RefreshToken::new(
         user_id.clone(),
         now + REFRESH_TOKEN_LIFETIME_SECS,
+        client_hint,
     );
 
     refresh_repo.put(&refresh).await
@@ -53,4 +55,51 @@ pub async fn issue_tokens(
         refresh_token_jti: refresh.jti,
         expires_in: ACCESS_TOKEN_LIFETIME_SECS,
     })
+}
+
+/// Parse a User-Agent header into a short human-readable session label.
+/// The result is stored once at token creation time.
+pub fn parse_ua(ua: &str) -> String {
+    // CLI / non-browser clients
+    if ua.is_empty()                { return "Unknown client".into(); }
+    if ua.starts_with("curl/")      { return "curl".into(); }
+    if ua.contains("python-httpx")
+        || ua.contains("python-requests") { return "Python".into(); }
+    if ua.to_lowercase().contains("go-http-client") { return "Go".into(); }
+    // Our own CLI will set a recognisable UA eventually; catch generic API clients
+    if !ua.contains("Mozilla/")     { return "API client".into(); }
+
+    // OS / device
+    let os = if ua.contains("iPhone") {
+        "iPhone"
+    } else if ua.contains("iPad") {
+        "iPad"
+    } else if ua.contains("Android") {
+        "Android"
+    } else if ua.contains("Macintosh") || ua.contains("Mac OS X") {
+        "macOS"
+    } else if ua.contains("Windows") {
+        "Windows"
+    } else if ua.contains("Linux") {
+        "Linux"
+    } else {
+        "Unknown OS"
+    };
+
+    // Browser — order matters: Edge contains "Chrome", Chrome contains "Safari"
+    let browser = if ua.contains("Edg/") || ua.contains("EdgA/") {
+        "Edge"
+    } else if ua.contains("OPR/") || ua.contains("Opera/") {
+        "Opera"
+    } else if ua.contains("CriOS/") || ua.contains("Chrome/") {
+        "Chrome"
+    } else if ua.contains("FxiOS/") || ua.contains("Firefox/") {
+        "Firefox"
+    } else if ua.contains("Safari/") {
+        "Safari"
+    } else {
+        "Browser"
+    };
+
+    format!("{} · {}", browser, os)
 }

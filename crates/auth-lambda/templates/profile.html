@@ -2,7 +2,7 @@
 
 {% block title %}profile – mendicant{% endblock %}
 
-{% block page_class %}page-wide{% endblock %}
+{% block page_class %}page-sidebar{% endblock %}
 
 {% block nav_right %}
   {% if nav.is_admin %}<a href="/admin">admin</a>{% endif %}
@@ -13,106 +13,272 @@
 {% endblock %}
 
 {% block content %}
-  <h1>profile</h1>
+  <div class="profile-layout">
+    <nav class="profile-sidenav">
+      <a href="#profile" class="profile-sidenav-link" data-section="profile">profile</a>
+      <a href="#passkeys" class="profile-sidenav-link" data-section="passkeys">passkeys</a>
+      <a href="#sessions" class="profile-sidenav-link" data-section="sessions">sessions</a>
+    </nav>
 
-  <div id="error-alert" class="error-banner" style="display:none;"></div>
+    <div class="profile-content">
 
-  <div class="card">
-    <div style="display:grid;gap:0.75rem;">
-      <div>
-        <div class="muted">name</div>
-        <div>{{ display_name }}</div>
-      </div>
-      <div>
-        <div class="muted">email</div>
-        <div>{{ email }}</div>
-      </div>
-      <div>
-        <div class="muted">role</div>
-        <div>{{ role }}</div>
-      </div>
-      <div>
-        <div class="muted">status</div>
-        <div>{{ status }}</div>
-      </div>
-      <div>
-        <div class="muted">user id</div>
-        <div>{{ id }}</div>
-      </div>
-    </div>
-  </div>
+      <!-- ── Profile ─────────────────────────────────────────────────── -->
+      <section id="profile" class="profile-section">
+        <h1>profile</h1>
 
-  <h2>passkeys</h2>
-  {% if credentials.is_empty() %}
-  <p class="muted" style="margin-bottom:1.5rem;">no passkeys registered.</p>
-  {% else %}
-  <table style="margin-bottom:1.5rem;">
-    <thead>
-      <tr>
-        <th>name</th>
-        <th>added</th>
-        <th>last used</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for cred in credentials %}
-    <tr data-cred-id="{{ cred.id }}">
-      <td>
-        <div class="passkey-nickname">{{ cred.nickname }}</div>
-        <div class="passkey-edit" hidden style="display:flex;flex-direction:column;gap:0.4rem;">
-          <input type="text" class="passkey-input" value="{{ cred.nickname }}"
-                 maxlength="64" style="margin-bottom:0;">
-          <div style="display:flex;gap:0.4rem;">
-            <button class="btn btn-secondary btn-sm" onclick="saveNickname(this)">save</button>
-            <button class="btn btn-secondary btn-sm" onclick="cancelEdit(this)">cancel</button>
-          </div>
-        </div>
-      </td>
-      <td class="muted">{{ cred.created_at }}</td>
-      <td class="muted">{{ cred.last_used_at }}</td>
-      <td style="white-space:nowrap;text-align:right;">
-        <div class="passkey-actions">
-          <button class="btn btn-secondary btn-sm" onclick="startEdit(this)">rename</button>
-          {% if cred.can_delete %}
-          <button class="btn btn-danger btn-sm" onclick="deleteKey(this)">delete</button>
-          {% endif %}
-        </div>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
+        <div id="profile-error" class="error-banner" style="display:none;"></div>
 
-  <div class="button-group">
-    <button class="btn btn-primary" onclick="addPasskey()" id="add-passkey-btn">add passkey</button>
-  </div>
+        <dl class="profile-fields">
 
-  <div class="debug-panel">
-    <h3>debug (dev only)</h3>
-    <div class="muted" style="margin-bottom:0.5rem;">jwt claims</div>
-    <pre>sub:   {{ debug_jwt_sub }}
+            <div class="profile-field" id="field-name">
+              <dt>Name</dt>
+              <dd>
+                <div class="profile-field-view">
+                  <span class="profile-field-value">{{ display_name }}</span>
+                  <button class="btn btn-secondary btn-sm" onclick="editField('name')">edit</button>
+                </div>
+                <div class="profile-field-edit" hidden>
+                  <input type="text" class="profile-field-input" value="{{ display_name }}" maxlength="128">
+                  <div style="display:flex;gap:0.4rem;">
+                    <button class="btn btn-secondary btn-sm" onclick="saveField('name', this)">save</button>
+                    <button class="btn btn-secondary btn-sm" onclick="cancelField('name')">cancel</button>
+                  </div>
+                </div>
+              </dd>
+            </div>
+
+            <div class="profile-field">
+              <dt>Email</dt>
+              <dd><span class="profile-field-value">{{ email }}</span></dd>
+            </div>
+
+            <div class="profile-field">
+              <dt>Role</dt>
+              <dd><span class="profile-field-value">{{ role }}</span></dd>
+            </div>
+
+            <div class="profile-field">
+              <dt>Status</dt>
+              <dd><span class="profile-field-value">{{ status }}</span></dd>
+            </div>
+
+          </dl>
+
+        <div class="debug-panel">
+          <h3>debug (dev only)</h3>
+          <div class="muted" style="margin-bottom:0.5rem;">jwt claims</div>
+          <pre>sub:   {{ debug_jwt_sub }}
 email: {{ debug_jwt_email }}
 role:  {{ debug_jwt_role }}</pre>
-    <div class="muted" style="margin-bottom:0.5rem;">database user</div>
-    <pre>id:           {{ id }}
+          <div class="muted" style="margin-bottom:0.5rem;">database user</div>
+          <pre>id:           {{ id }}
 email:        {{ email }}
 display_name: {{ display_name }}
 role:         {{ role }}
 status:       {{ status }}</pre>
-  </div>
+        </div>
+      </section>
+
+      <!-- ── Passkeys ────────────────────────────────────────────────── -->
+      <section id="passkeys" class="profile-section" hidden>
+        <h1>passkeys</h1>
+
+        <div id="error-alert" class="error-banner" style="display:none;"></div>
+
+        {% if credentials.is_empty() %}
+        <p class="muted" style="margin-bottom:1.5rem;">no passkeys registered.</p>
+        {% else %}
+        <table style="margin-bottom:1.5rem;">
+          <thead>
+            <tr>
+              <th>name</th>
+              <th>added</th>
+              <th>last used</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for cred in credentials %}
+          <tr data-cred-id="{{ cred.id }}">
+            <td>
+              <div class="passkey-nickname">{{ cred.nickname }}</div>
+              <div class="passkey-edit" hidden style="display:flex;flex-direction:column;gap:0.4rem;">
+                <input type="text" class="passkey-input" value="{{ cred.nickname }}"
+                       maxlength="64" style="margin-bottom:0;">
+                <div style="display:flex;gap:0.4rem;">
+                  <button class="btn btn-secondary btn-sm" onclick="saveNickname(this)">save</button>
+                  <button class="btn btn-secondary btn-sm" onclick="cancelEdit(this)">cancel</button>
+                </div>
+              </div>
+            </td>
+            <td class="muted">{{ cred.created_at }}</td>
+            <td class="muted">{{ cred.last_used_at }}</td>
+            <td style="white-space:nowrap;text-align:right;">
+              <div class="passkey-actions">
+                <button class="btn btn-secondary btn-sm" onclick="startEdit(this)">rename</button>
+                {% if cred.can_delete %}
+                <button class="btn btn-danger btn-sm" onclick="deleteKey(this)">delete</button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+
+        <div class="button-group">
+          <button class="btn btn-primary" onclick="addPasskey()" id="add-passkey-btn">add passkey</button>
+        </div>
+      </section>
+
+      <!-- ── Sessions ────────────────────────────────────────────────── -->
+      <section id="sessions" class="profile-section" hidden>
+        <h1>sessions</h1>
+
+        <div id="session-error-alert" class="error-banner" style="display:none;"></div>
+
+        {% if sessions.is_empty() %}
+        <p class="muted" style="margin-bottom:1.5rem;">no active sessions found.</p>
+        {% else %}
+        <table style="margin-bottom:1.5rem;">
+          <thead>
+            <tr>
+              <th></th>
+              <th>expires</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for session in sessions %}
+          <tr {% if session.is_current %}class="session-current"{% endif %}>
+            <td>
+              {{ session.client_hint }}
+              {% if session.is_current %}
+              <span class="badge badge-teal" style="margin-left:0.5rem;">this session</span>
+              {% endif %}
+            </td>
+            <td class="muted">{{ session.expires_in }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+
+        {% if has_other_sessions %}
+        <div class="button-group">
+          <button class="btn btn-danger" onclick="revokeOthers(this)">logout all other sessions</button>
+        </div>
+        {% endif %}
+      </section>
+
+    </div><!-- .profile-content -->
+  </div><!-- .profile-layout -->
 {% endblock %}
 
 {% block scripts %}
   <script>
+    // ── Section switching ────────────────────────────────────────────────────
+    const sections = document.querySelectorAll('.profile-section');
+    const navLinks = document.querySelectorAll('.profile-sidenav-link');
+
+    function showSection(id) {
+      sections.forEach(s => s.hidden = s.id !== id);
+      navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === id));
+    }
+
+    function sectionFromHash() {
+      const hash = window.location.hash.replace('#', '');
+      const valid = ['profile', 'passkeys', 'sessions'];
+      return valid.includes(hash) ? hash : 'profile';
+    }
+
+    navLinks.forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const section = a.dataset.section;
+        history.pushState(null, '', '#' + section);
+        showSection(section);
+      });
+    });
+
+    window.addEventListener('popstate', () => showSection(sectionFromHash()));
+    showSection(sectionFromHash());
+
+    // ── Shared error display ─────────────────────────────────────────────────
     function showError(message) {
-      const el = document.getElementById('error-alert');
+      const el = document.getElementById('error-alert') || document.getElementById('session-error-alert');
       el.textContent = message;
       el.style.display = 'block';
       setTimeout(() => el.style.display = 'none', 6000);
     }
 
+    function showSessionError(message) {
+      const el = document.getElementById('session-error-alert');
+      el.textContent = message;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 6000);
+    }
+
+    // ── Profile field editing ────────────────────────────────────────────────
+    const fieldConfigs = {
+      name: {
+        endpoint: '/me',
+        payload: input => ({ display_name: input.value.trim() }),
+        validate: v => v.trim().length > 0 && v.trim().length <= 128,
+        errorMsg: 'Name must be between 1 and 128 characters.',
+      },
+    };
+
+    function editField(key) {
+      const el = document.getElementById('field-' + key);
+      el.querySelector('.profile-field-view').hidden = true;
+      const edit = el.querySelector('.profile-field-edit');
+      edit.hidden = false;
+      const input = edit.querySelector('input');
+      input.focus();
+      input.select();
+      input.addEventListener('keydown', function onKey(e) {
+        if (e.key === 'Enter')  { e.preventDefault(); saveField(key, input); }
+        if (e.key === 'Escape') { cancelField(key); input.removeEventListener('keydown', onKey); }
+      });
+    }
+
+    function cancelField(key) {
+      const el = document.getElementById('field-' + key);
+      el.querySelector('.profile-field-view').hidden = false;
+      el.querySelector('.profile-field-edit').hidden = true;
+    }
+
+    async function saveField(key, btn) {
+      const cfg = fieldConfigs[key];
+      const el = document.getElementById('field-' + key);
+      const input = el.querySelector('.profile-field-input');
+      if (!cfg.validate(input.value)) {
+        document.getElementById('profile-error').textContent = cfg.errorMsg;
+        document.getElementById('profile-error').style.display = 'block';
+        setTimeout(() => document.getElementById('profile-error').style.display = 'none', 5000);
+        return;
+      }
+      const saveBtn = el.querySelector('.profile-field-edit .btn');
+      saveBtn.disabled = true;
+      try {
+        const resp = await fetch(cfg.endpoint, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cfg.payload(input)),
+        });
+        if (!resp.ok) throw new Error(await resp.text() || 'save failed');
+        el.querySelector('.profile-field-value').textContent = input.value.trim();
+        cancelField(key);
+      } catch (e) {
+        document.getElementById('profile-error').textContent = 'Save failed: ' + e.message;
+        document.getElementById('profile-error').style.display = 'block';
+        setTimeout(() => document.getElementById('profile-error').style.display = 'none', 5000);
+        saveBtn.disabled = false;
+      }
+    }
+
+    // ── Passkey management ───────────────────────────────────────────────────
     function startEdit(btn) {
       const row = btn.closest('tr');
       row.querySelector('.passkey-nickname').hidden = true;
@@ -246,6 +412,22 @@ status:       {{ status }}</pre>
         showError('failed to add passkey: ' + e.message);
         btn.disabled = false;
         btn.textContent = 'add passkey';
+      }
+    }
+
+    // ── Session management ───────────────────────────────────────────────────
+    async function revokeOthers(btn) {
+      if (!confirm('logout all other sessions?\n\nonly this session will remain active.')) return;
+      btn.disabled = true;
+      btn.textContent = 'logging out...';
+      try {
+        const resp = await fetch('/auth/sessions/revoke-others', { method: 'POST' });
+        if (!resp.ok) throw new Error(await resp.text() || 'failed');
+        window.location.reload();
+      } catch (e) {
+        showSessionError('failed to revoke sessions: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'logout all other sessions';
       }
     }
   </script>

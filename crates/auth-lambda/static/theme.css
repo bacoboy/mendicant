@@ -188,10 +188,14 @@ button:disabled, .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 1.25rem;
+  padding: 0 1.25rem;
+  height: 3rem;
   background: var(--mantle);
   border-bottom: 1px solid var(--surface0);
   font-size: 0.85rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .topnav-left {
@@ -270,6 +274,100 @@ tbody tr:hover td { background: var(--surface0); }
 .badge-regional { background: rgba(166,173,200,0.15); color: var(--subtext0); }
 .badge-active   { background: rgba(166,227,161,0.15); color: var(--green);   }
 .badge-error    { background: rgba(243,139,168,0.15); color: var(--red);     }
+.badge-teal     { background: rgba(148,226,213,0.15); color: var(--teal);    }
+
+/* ── Profile sidebar layout ───────────────────────────────────────────── */
+
+/* Override the normal centered page layout — sidebar pages are full-width */
+.page-sidebar {
+  max-width: none;
+  margin: -1rem; /* counteract body padding */
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  min-height: calc(100vh - 3rem);
+  align-items: start;
+}
+
+.profile-sidenav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: sticky;
+  top: 3rem;
+  height: calc(100vh - 3rem);
+  padding: 1.5rem 0.75rem;
+  background: var(--mantle);
+  border-right: 1px solid var(--surface0);
+  overflow-y: auto;
+}
+
+.profile-sidenav-link {
+  display: block;
+  padding: 0.45rem 0.75rem;
+  border-radius: 5px;
+  color: var(--subtext1);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background 0.1s, color 0.1s;
+}
+
+.profile-sidenav-link:hover {
+  background: var(--surface0);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.profile-sidenav-link.active {
+  background: var(--surface1);
+  color: var(--lavender);
+}
+
+.profile-content {
+  padding: 2rem 2.5rem;
+  min-width: 0; /* prevent grid blowout */
+}
+
+/* Current session row highlight */
+.session-current td {
+  background: rgba(148,226,213,0.05);
+}
+
+/* ── Profile field list ───────────────────────────────────────────────── */
+.profile-field {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--surface0);
+}
+.profile-field:last-child { border-bottom: none; }
+
+.profile-field dt {
+  color: var(--subtext0);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  padding-top: 0.15rem; /* align with text baseline */
+}
+
+.profile-field dd {
+  margin: 0;
+}
+
+.profile-field-view {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-field-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
 
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 .button-group { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }

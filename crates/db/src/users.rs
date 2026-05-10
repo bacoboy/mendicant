@@ -144,6 +144,22 @@ impl UserRepository {
         Ok(())
     }
 
+    pub async fn update_display_name(&self, id: &UserId, display_name: &str) -> Result<(), DbError> {
+        self.db.inner
+            .update_item()
+            .table_name(&self.db.users_table)
+            .key("pk", pk(id))
+            .key("sk", AttributeValue::S(SK.into()))
+            .update_expression("SET display_name = :name, updated_at = :now")
+            .expression_attribute_values(":name", AttributeValue::S(display_name.into()))
+            .expression_attribute_values(":now", AttributeValue::S(now_utc_rfc3339()))
+            .condition_expression("attribute_exists(pk)")
+            .send()
+            .await
+            .map_err(map_update_error)?;
+        Ok(())
+    }
+
     pub async fn update_role(&self, id: &UserId, role: &Role) -> Result<(), DbError> {
         self.db.inner
             .update_item()

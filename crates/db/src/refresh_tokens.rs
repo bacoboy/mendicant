@@ -24,6 +24,9 @@ fn token_to_item(t: &RefreshToken) -> Item {
     m.insert("user_id".into(), AttributeValue::S(t.user_id.to_string()));
     m.insert("expires_at".into(), AttributeValue::N(t.expires_at.to_string()));
     m.insert("revoked".into(), AttributeValue::Bool(t.revoked));
+    if let Some(hint) = &t.client_hint {
+        m.insert("client_hint".into(), AttributeValue::S(hint.clone()));
+    }
     m
 }
 
@@ -36,6 +39,7 @@ fn item_to_token(item: Item) -> Result<RefreshToken, DbError> {
         ),
         expires_at: get_n_i64(&item, "expires_at")?,
         revoked: get_bool(&item, "revoked")?,
+        client_hint: item.get("client_hint").and_then(|v| v.as_s().ok()).map(|s| s.clone()),
     })
 }
 
@@ -86,6 +90,29 @@ impl RefreshTokenRepository {
             .await
             .map_err(map_update_error)?;
         Ok(())
+    }
+
+    /// List all active (non-revoked, non-expired) refresh tokens for a user.
+    pub async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<RefreshToken>, DbError> {
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        let resp = self.db.inner
+            .query()
+            .table_name(&self.db.refresh_tokens_table)
+            .index_name("user-index")
+            .key_condition_expression("user_id = :uid")
+            .expression_attribute_values(":uid", AttributeValue::S(user_id.to_string()))
+            .filter_expression("revoked = :f AND expires_at > :now")
+            .expression_attribute_values(":f", AttributeValue::Bool(false))
+            .expression_attribute_values(":now", AttributeValue::N(now.to_string()))
+            .send()
+            .await?;
+
+        let tokens = resp.items.unwrap_or_default()
+            .into_iter()
+            .filter_map(|item| item_to_token(item).ok())
+            .collect();
+
+        Ok(tokens)
     }
 
     /// Revoke all active refresh tokens for a user (e.g. on account suspension).

@@ -1,6 +1,6 @@
 # Project Progress
 
-Last updated: 2026-05-10
+Last updated: 2026-05-10 (session 6)
 
 ## Current State
 
@@ -60,6 +60,21 @@ Ready for: SES integration and Terraform deployment work.
 - Profile page widened (`page-wide`), passkey rename buttons stacked vertically
 - Nav user email styled in teal to distinguish from admin/logout links
 - `docker-compose.yml`: `NO_PROXY` added to all services to bypass OrbStack's HTTP proxy for inter-container calls
+
+### Session 6 — Profile left-nav, session management, UA session labels (2026-05-10)
+- `/me` redesigned with sticky left sidebar (Profile / Passkeys / Sessions sections)
+- Sidebar flush-left, full viewport height; content expands freely on wide screens
+- Topnav is now `position: sticky` with explicit `height: 3rem`
+- Profile section: clean `dt/dd` field list; Name has inline edit (Enter/Escape supported)
+- `PATCH /me` endpoint → `UserRepository::update_display_name`
+- Sessions section: lists active refresh tokens only (`revoked=false AND expires_at>now`)
+- Current session highlighted with teal badge; fuzzy expiry ("expires in 29 days")
+- "Logout all other sessions" button → `POST /auth/sessions/revoke-others`
+- `RefreshToken` gains `client_hint: Option<String>` — UA label stored once at login
+- `parse_ua()` in `jwt.rs` maps User-Agent to short label ("Safari · macOS", "CLI", etc.)
+- Label carried forward on token rotation; CLI device flow always stores "CLI"
+- `RefreshTokenRepository::list_for_user` added (queries `user-index` GSI)
+- All logout paths consolidated to `POST /auth/logout` (revokes DB token + clears cookies)
 
 ### Admin features
 - `GET /admin` — dashboard with DynamoDB table stats
