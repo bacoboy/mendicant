@@ -19,6 +19,17 @@ resource "aws_apigatewayv2_api" "main" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "api_access" {
+  name              = "/aws/apigateway/${local.prefix}-${local.region}"
+  retention_in_days = 7
+
+  tags = {
+    app         = var.app_name
+    environment = var.environment
+    region      = local.region
+  }
+}
+
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.main.id
   name        = "$default"
@@ -27,6 +38,20 @@ resource "aws_apigatewayv2_stage" "default" {
   default_route_settings {
     throttling_burst_limit = 100
     throttling_rate_limit  = 20
+  }
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_access.arn
+    format = jsonencode({
+      requestId = "$context.requestId"
+      ip        = "$context.identity.sourceIp"
+      method    = "$context.httpMethod"
+      path      = "$context.path"
+      status    = "$context.status"
+      bytes     = "$context.responseLength"
+      latencyMs = "$context.responseLatency"
+      userAgent = "$context.identity.userAgent"
+    })
   }
 }
 
