@@ -29,6 +29,8 @@ services:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: us-east-2
+      NO_PROXY: dynamodb-local
+      no_proxy: dynamodb-local
     depends_on:
       - dynamodb-local
 
@@ -39,6 +41,8 @@ services:
     environment:
       LAMBDA_ENDPOINT: http://auth-lambda:8080/2015-03-31/functions/function/invocations
       RUST_LOG: local_apigw=info
+      NO_PROXY: auth-lambda
+      no_proxy: auth-lambda
     ports:
       - "3000:3000"
     depends_on:
@@ -56,6 +60,9 @@ services:
       - ./crates/auth-lambda/static:/srv/static
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      NO_PROXY: api-gateway
+      no_proxy: api-gateway
     depends_on:
       - api-gateway
 

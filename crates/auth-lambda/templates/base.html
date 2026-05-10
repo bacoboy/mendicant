@@ -45,7 +45,10 @@
         try {
           const resp = await fetch('/auth/refresh', { method: 'POST', credentials: 'same-origin' });
           if (resp.ok) { scheduleRefresh(); }
-          else { window.location.href = '/'; }
+          else {
+            document.cookie = 'auth_exp=; Max-Age=0; Path=/; SameSite=Strict';
+            if (window.location.pathname !== '/') window.location.href = '/';
+          }
         } catch (_) {}
       }
       scheduleRefresh();
