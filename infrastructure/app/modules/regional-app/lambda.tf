@@ -1,8 +1,9 @@
 # Lambda functions, API Gateway integrations, and routes.
 #
 # Route ownership:
-#   auth-lambda  — all HTML pages, WebAuthn flows, OAuth device flow, JWKS, static assets
-#   users-lambda — profile API (PATCH /me), admin user management (/admin/users/*)
+#   auth-lambda  — all HTML pages, WebAuthn flows, OAuth device flow, JWKS, static assets,
+#                  admin user management UI (/admin/users/*)
+#   users-lambda — profile API (PATCH /me), admin user actions (PATCH /admin/users/{id})
 #
 # The $default catch-all routes everything unmatched to auth-lambda.
 # Specific routes for users-lambda take precedence (API GW evaluates most-specific first).
@@ -92,10 +93,7 @@ resource "aws_apigatewayv2_integration" "users" {
 resource "aws_apigatewayv2_route" "users_routes" {
   for_each = toset([
     "PATCH /me",
-    "GET /admin/users",
-    "GET /admin/users/{id}",
     "PATCH /admin/users/{id}",
-    "DELETE /admin/users/{id}",
   ])
 
   api_id    = local.api_gw_id
