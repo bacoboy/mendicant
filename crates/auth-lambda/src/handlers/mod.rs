@@ -10,7 +10,6 @@ pub(crate) struct NavUser {
 
 mod admin;
 mod auth;
-mod credentials;
 mod oauth;
 mod pages;
 mod static_files;
@@ -20,7 +19,6 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(pages::routes())
         .merge(auth::routes())
-        .merge(credentials::routes())
         .merge(admin::routes())
         .merge(oauth::routes())
         .merge(well_known::routes())
