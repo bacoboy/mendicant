@@ -69,12 +69,12 @@ Ready for: SES integration and Terraform deployment work.
 - `PATCH /me` endpoint → `UserRepository::update_display_name`
 - Sessions section: lists active refresh tokens only (`revoked=false AND expires_at>now`)
 - Current session highlighted with teal badge; fuzzy expiry ("expires in 29 days")
-- "Logout all other sessions" button → `POST /auth/sessions/revoke-others`
+- "Logout all other sessions" button → `POST /me/sessions/revoke-others`
 - `RefreshToken` gains `client_hint: Option<String>` — UA label stored once at login
 - `parse_ua()` in `jwt.rs` maps User-Agent to short label ("Safari · macOS", "CLI", etc.)
 - Label carried forward on token rotation; CLI device flow always stores "CLI"
 - `RefreshTokenRepository::list_for_user` added (queries `user-index` GSI)
-- All logout paths consolidated to `POST /auth/logout` (revokes DB token + clears cookies)
+- All logout paths consolidated to `POST /me/logout` (revokes DB token + clears cookies)
 
 ### Session 8 — Admin table browser polish, routing fix (2026-05-10)
 - `UserRepository::list` fully rewritten from `Scan` to `Query` using two GSIs: `sk-email-index` (list-all + email prefix) and `role-index` (role filter ± email prefix); status is always a `FilterExpression` — no table scans

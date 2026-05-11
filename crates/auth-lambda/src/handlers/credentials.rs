@@ -16,12 +16,12 @@ use crate::state::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
-            "/auth/credentials/{id}",
+            "/me/credentials/{id}",
             patch(rename_credential).delete(delete_credential),
         )
 }
 
-// ── PATCH /auth/credentials/{id} ─────────────────────────────────────────────
+// ── PATCH /me/credentials/{id} ───────────────────────────────────────────────
 
 #[derive(Deserialize)]
 struct RenameRequest {
@@ -56,7 +56,7 @@ async fn rename_credential(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// ── DELETE /auth/credentials/{id} ────────────────────────────────────────────
+// ── DELETE /me/credentials/{id} ──────────────────────────────────────────────
 
 async fn delete_credential(
     State(state): State<AppState>,

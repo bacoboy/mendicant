@@ -529,9 +529,9 @@ async function doRecoverWithToken(ctx) {
  * @adminEnroll()
  *
  * Admin YubiKey enrollment flow:
- *   1. POST /admin/enroll/begin  → challenge (consumes the enrollment token)
+ *   1. POST /enroll/begin  → challenge (consumes the enrollment token)
  *   2. navigator.credentials.create()
- *   3. POST /admin/enroll/complete → auth cookie + redirect to /me
+ *   3. POST /enroll/complete → auth cookie + redirect to /me
  */
 async function doAdminEnroll(ctx) {
   setSignal('enrollError', '');
@@ -545,7 +545,7 @@ async function doAdminEnroll(ctx) {
   // 1. Begin enrollment (consumes the single-use token)
   let beginSignals;
   try {
-    beginSignals = await fetchSSE('/admin/enroll/begin', { token });
+    beginSignals = await fetchSSE('/enroll/begin', { token });
   } catch (e) {
     setSignal('enrollError', `Could not start enrollment: ${e.message}`);
     return;
@@ -577,7 +577,7 @@ async function doAdminEnroll(ctx) {
 
   // 3. Complete enrollment (server verifies AAGUID, sets auth cookie, redirects)
   try {
-    await fetchSSE('/admin/enroll/complete', {
+    await fetchSSE('/enroll/complete', {
       challenge_id: challengeId,
       response: serializeRegistration(credential),
     });

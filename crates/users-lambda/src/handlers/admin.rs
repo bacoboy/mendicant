@@ -1,8 +1,7 @@
 use axum::Json;
 use axum::Router;
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
-use axum::routing::get;
+use axum::extract::{Path, State};
+use axum::routing::patch;
 use serde::{Deserialize, Serialize};
 use anyhow::Context as _;
 
@@ -15,8 +14,7 @@ use crate::state::AppState;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/admin/users", get(list_users))
-        .route("/admin/users/:id", get(get_user).patch(patch_user).delete(delete_user))
+        .route("/admin/users/:id", patch(patch_user))
 }
 
 fn require_admin(auth: &AuthUser) -> Result<(), AppError> {
@@ -25,8 +23,6 @@ fn require_admin(auth: &AuthUser) -> Result<(), AppError> {
     }
     Ok(())
 }
-
-// ── Response type (shared) ────────────────────────────────────────────────────
 
 #[derive(Serialize)]
 struct UserResponse {
@@ -56,58 +52,6 @@ impl From<&User> for UserResponse {
             updated_at: u.updated_at.format(&Rfc3339).unwrap_or_default(),
         }
     }
-}
-
-// ── Pagination helper ─────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct ListQuery {
-    limit: Option<u32>,
-    cursor: Option<String>,
-}
-
-#[derive(Serialize)]
-struct ListResponse {
-    users: Vec<UserResponse>,
-    next_cursor: Option<String>,
-}
-
-// ── Handlers ──────────────────────────────────────────────────────────────────
-
-/// GET /admin/users — list all users (Administrator role required).
-async fn list_users(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Query(q): Query<ListQuery>,
-) -> Result<Json<ListResponse>, AppError> {
-    require_admin(&auth)?;
-    let limit = q.limit.unwrap_or(50).min(200);
-    let (users, next_cursor) = UserRepository::new(state.db)
-        .list(limit, q.cursor, None, None, None)
-        .await
-        .context("failed to list users")?;
-    Ok(Json(ListResponse {
-        users: users.iter().map(UserResponse::from).collect(),
-        next_cursor,
-    }))
-}
-
-/// GET /admin/users/:id — get a single user by ID (Administrator role required).
-async fn get_user(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(id): Path<String>,
-) -> Result<Json<UserResponse>, AppError> {
-    require_admin(&auth)?;
-    let user_id = parse_user_id(&id)?;
-    let user = UserRepository::new(state.db)
-        .get(&user_id)
-        .await
-        .map_err(|e| match e {
-            db::error::DbError::NotFound => AppError::NotFound,
-            other => AppError::Internal(other.into()),
-        })?;
-    Ok(Json(UserResponse::from(&user)))
 }
 
 #[derive(Deserialize)]
@@ -148,25 +92,6 @@ async fn patch_user(
     })?;
 
     Ok(Json(UserResponse::from(&user)))
-}
-
-/// DELETE /admin/users/:id — suspend a user account (Administrator role required).
-/// Does not hard-delete; sets status to Suspended.
-async fn delete_user(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(id): Path<String>,
-) -> Result<StatusCode, AppError> {
-    require_admin(&auth)?;
-    let user_id = parse_user_id(&id)?;
-    UserRepository::new(state.db)
-        .update_status(&user_id, &UserStatus::Suspended)
-        .await
-        .map_err(|e| match e {
-            db::error::DbError::NotFound => AppError::NotFound,
-            other => AppError::Internal(other.into()),
-        })?;
-    Ok(StatusCode::NO_CONTENT)
 }
 
 fn parse_user_id(s: &str) -> Result<UserId, AppError> {

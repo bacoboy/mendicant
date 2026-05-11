@@ -151,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
     println!();
     println!("Enrollment URL (valid for {} minutes):", args.ttl_minutes);
     println!();
-    println!("  {site_url}/admin/enroll?token={token_id}");
+    println!("  {site_url}/enroll?token={token_id}");
     println!();
     println!("Open the URL in a browser on the machine where your YubiKey is attached.");
     println!("The link is single-use. Re-run this tool to generate a new one.");

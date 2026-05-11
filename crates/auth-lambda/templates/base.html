@@ -42,7 +42,7 @@
         if (msUntilRefresh <= 0) { doRefresh(); return; }
         refreshTimer = setTimeout(doRefresh, msUntilRefresh);
       }
-      document.querySelectorAll('form[action="/auth/logout"]').forEach(function(form) {
+      document.querySelectorAll('form[action="/me/logout"]').forEach(function(form) {
         form.addEventListener('submit', function() { clearTimeout(refreshTimer); });
       });
       async function doRefresh() {

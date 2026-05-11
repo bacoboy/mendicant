@@ -64,9 +64,9 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/users/{id}", axum::routing::delete(admin_delete_user))
         .route("/admin/users/{id}/reset-passkey", post(admin_reset_passkey))
         .route("/admin/tables/{table}", get(table_page))
-        .route("/admin/enroll", get(enroll_page))
-        .route("/admin/enroll/begin", post(enroll_begin))
-        .route("/admin/enroll/complete", post(enroll_complete))
+        .route("/enroll", get(enroll_page))
+        .route("/enroll/begin", post(enroll_begin))
+        .route("/enroll/complete", post(enroll_complete))
 }
 
 // ── Admin landing page ────────────────────────────────────────────────────────
@@ -840,7 +840,7 @@ struct AdminEnrollChallengeState {
     state: SecurityKeyRegistration,
 }
 
-/// POST /admin/enroll/begin
+/// POST /enroll/begin
 ///
 /// 1. Atomically consumes the single-use enrollment token (AdminEnrollment challenge).
 /// 2. Starts a WebAuthn passkey registration ceremony for the admin user.
@@ -962,7 +962,7 @@ struct EnrollCompleteRequest {
     response: RegisterPublicKeyCredential,
 }
 
-/// POST /admin/enroll/complete
+/// POST /enroll/complete
 ///
 /// 1. Atomically consumes the WebAuthn challenge.
 /// 2. Verifies the registration response.

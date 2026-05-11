@@ -37,10 +37,10 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/login/begin", post(login_begin))
         .route("/auth/login/complete", post(login_complete))
         .route("/auth/refresh", post(token_refresh))
-        .route("/auth/logout", post(logout))
-        .route("/auth/passkey/add/begin", post(add_passkey_begin))
-        .route("/auth/passkey/add/complete", post(add_passkey_complete))
-        .route("/auth/sessions/revoke-others", post(revoke_other_sessions))
+        .route("/me/logout", post(logout))
+        .route("/me/passkey/add/begin", post(add_passkey_begin))
+        .route("/me/passkey/add/complete", post(add_passkey_complete))
+        .route("/me/sessions/revoke-others", post(revoke_other_sessions))
         .route("/auth/recover/begin", post(recover_begin))
         .route("/auth/recover/complete", post(recover_complete))
 }
@@ -499,7 +499,7 @@ async fn login_complete(
 
 // ── Add Passkey (for authenticated users) ─────────────────────────────────────
 
-/// POST /auth/passkey/add/begin — start a WebAuthn registration for an existing user
+/// POST /me/passkey/add/begin — start a WebAuthn registration for an existing user
 async fn add_passkey_begin(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -576,7 +576,7 @@ struct AddPasskeyCompleteRequest {
     response: RegisterPublicKeyCredential,
 }
 
-/// POST /auth/passkey/add/complete — complete passkey registration for authenticated user
+/// POST /me/passkey/add/complete — complete passkey registration for authenticated user
 async fn add_passkey_complete(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -874,7 +874,7 @@ async fn token_refresh(
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 
-/// POST /auth/logout — revoke the refresh token and clear all auth cookies.
+/// POST /me/logout — revoke the refresh token and clear all auth cookies.
 async fn logout(
     axum::extract::State(state): axum::extract::State<AppState>,
     headers: axum::http::HeaderMap,
@@ -921,7 +921,7 @@ fn extract_refresh_jti(headers: &axum::http::HeaderMap) -> Option<String> {
 
 // ── Revoke other sessions ─────────────────────────────────────────────────────
 
-/// POST /auth/sessions/revoke-others — revoke all refresh tokens for the
+/// POST /me/sessions/revoke-others — revoke all refresh tokens for the
 /// current user except the one belonging to this session.
 async fn revoke_other_sessions(
     State(state): State<AppState>,

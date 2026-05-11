@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
-use axum::routing::get;
+use axum::routing::patch;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use anyhow::Context as _;
@@ -15,7 +15,7 @@ use crate::state::AppState;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/me", get(get_profile).patch(patch_profile))
+        .route("/me", patch(patch_profile))
 }
 
 #[derive(Serialize)]
@@ -50,22 +50,6 @@ fn parse_user_id(sub: &str) -> Result<UserId, AppError> {
     uuid::Uuid::parse_str(sub)
         .map(UserId)
         .map_err(|_| AppError::Internal(anyhow::anyhow!("malformed sub in token")))
-}
-
-/// GET /me — return the authenticated user's profile.
-async fn get_profile(
-    State(state): State<AppState>,
-    AuthUser(claims): AuthUser,
-) -> Result<Json<ProfileResponse>, AppError> {
-    let user_id = parse_user_id(&claims.sub)?;
-    let user = UserRepository::new(state.db)
-        .get(&user_id)
-        .await
-        .map_err(|e| match e {
-            db::error::DbError::NotFound => AppError::NotFound,
-            other => AppError::Internal(other.into()),
-        })?;
-    Ok(Json(ProfileResponse::from(&user)))
 }
 
 #[derive(Deserialize)]

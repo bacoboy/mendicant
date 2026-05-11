@@ -42,19 +42,19 @@ A small Datastar plugin (`static/passkey-plugin.js`, single `<script>` tag) adds
 
 ## Admin Enrollment Flow
 
-`GET /admin/enroll?token=<id>` — single-use enrollment for first/additional hardware key.
+`GET /enroll?token=<id>` — single-use enrollment for first/additional hardware key.
 
 The `bootstrap` CLI creates an admin user and stores a single-use `AdminEnrollment` challenge:
-1. `POST /admin/enroll/begin` — consumes token atomically, starts `SecurityKey` registration with `authenticatorAttachment: cross-platform`, `residentKey: preferred`, `userVerification: preferred`
+1. `POST /enroll/begin` — consumes token atomically, starts `SecurityKey` registration with `authenticatorAttachment: cross-platform`, `residentKey: preferred`, `userVerification: preferred`
 2. Browser prompts for PIN (CTAP2 requirement for resident credential) then touch
-3. `POST /admin/enroll/complete` — verifies, stores credential, issues JWT, redirects to `/me`
+3. `POST /enroll/complete` — verifies, stores credential, issues JWT, redirects to `/me`
 
 `residentKey: preferred` is essential — writes credential to key's internal storage for discovery-mode login. After enrollment, login is `userVerification: discouraged` — single touch, no PIN.
 
 ## Credential Management
 
-- `PATCH /auth/credentials/{id}` — rename a passkey. Body: `{"nickname": "..."}`. Auth required.
-- `DELETE /auth/credentials/{id}` — delete a passkey. Returns 400 if last credential (lockout prevention). Auth required.
+- `PATCH /me/credentials/{id}` — rename a passkey. Body: `{"nickname": "..."}`. Auth required.
+- `DELETE /me/credentials/{id}` — delete a passkey. Returns 400 if last credential (lockout prevention). Auth required.
 - `/me` profile page: table of all credentials (nickname, date added, last used). Inline rename. Delete button hidden when only one credential remains.
 
 ## UI / Theming

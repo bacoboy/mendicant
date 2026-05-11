@@ -7,7 +7,7 @@
 {% block nav_right %}
   {% if nav.is_admin %}<a href="/admin">admin</a>{% endif %}
   <a href="/me" class="topnav-user">{{ nav.email }}</a>
-  <form method="POST" action="/auth/logout" style="display:contents;">
+  <form method="POST" action="/me/logout" style="display:contents;">
     <button type="submit" class="topnav-logout">logout</button>
   </form>
 {% endblock %}
@@ -286,11 +286,16 @@ status:       {{ status }}</pre>
       const edit = row.querySelector('.passkey-edit');
       edit.hidden = false;
       const input = edit.querySelector('input');
+      input.disabled = false;
       input.focus();
-      input.addEventListener('keydown', function onKey(e) {
-        if (e.key === 'Enter')  { e.preventDefault(); saveNickname(input); }
-        if (e.key === 'Escape') { cancelEdit(input); input.removeEventListener('keydown', onKey); }
-      });
+      input.select();
+      if (!input.dataset.keyBound) {
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter')  { e.preventDefault(); saveNickname(input); }
+          if (e.key === 'Escape') { cancelEdit(input); }
+        });
+        input.dataset.keyBound = '1';
+      }
     }
 
     function cancelEdit(btn) {
@@ -308,7 +313,7 @@ status:       {{ status }}</pre>
       if (!nickname) { showError('nickname cannot be empty.'); return; }
       btn.disabled = true;
       try {
-        const resp = await fetch(`/auth/credentials/${credId}`, {
+        const resp = await fetch(`/me/credentials/${credId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nickname }),
@@ -329,7 +334,7 @@ status:       {{ status }}</pre>
       if (!confirm(`delete passkey "${nickname}"?\n\nthis cannot be undone.`)) return;
       btn.disabled = true;
       try {
-        const resp = await fetch(`/auth/credentials/${credId}`, { method: 'DELETE' });
+        const resp = await fetch(`/me/credentials/${credId}`, { method: 'DELETE' });
         if (!resp.ok) throw new Error(await resp.text() || 'delete failed');
         window.location.reload();
       } catch (e) {
@@ -362,7 +367,7 @@ status:       {{ status }}</pre>
       btn.disabled = true;
       btn.textContent = 'adding passkey...';
       try {
-        const beginResp = await fetch('/auth/passkey/add/begin', { method: 'POST' });
+        const beginResp = await fetch('/me/passkey/add/begin', { method: 'POST' });
         if (!beginResp.ok) throw new Error('failed to start registration');
         const text = await beginResp.text();
         const match = text.match(/data: signals ({.*})/);
@@ -398,7 +403,7 @@ status:       {{ status }}</pre>
             ...(credential.response.getTransports ? { transports: credential.response.getTransports() } : {}),
           },
         };
-        const completeResp = await fetch('/auth/passkey/add/complete', {
+        const completeResp = await fetch('/me/passkey/add/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ challenge_id: signals.challengeId, response: serialized }),
@@ -421,7 +426,7 @@ status:       {{ status }}</pre>
       btn.disabled = true;
       btn.textContent = 'logging out...';
       try {
-        const resp = await fetch('/auth/sessions/revoke-others', { method: 'POST' });
+        const resp = await fetch('/me/sessions/revoke-others', { method: 'POST' });
         if (!resp.ok) throw new Error(await resp.text() || 'failed');
         window.location.reload();
       } catch (e) {
