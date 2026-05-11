@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Mendicant{% endblock %}</title>
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+</head>
+<body>
+  {% block pre_content %}{% endblock %}
+  <nav class="topnav">
+    <div class="topnav-left">
+      <a href="/" class="topnav-brand">mendicant</a>
+    </div>
+    <div class="topnav-links">
+      {% block nav_right %}{% endblock %}
+    </div>
+  </nav>
+  <main class="page {% block page_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+  <script>
+    (function () {
+      function cookieVal(name) {
+        const prefix = name + '=';
+        for (const part of document.cookie.split(';')) {
+          const s = part.trim();
+          if (s.startsWith(prefix)) return s.slice(prefix.length);
+        }
+        return null;
+      }
+      let refreshTimer = null;
+      function scheduleRefresh() {
+        const exp = parseInt(cookieVal('auth_exp') || '0', 10);
+        if (!exp) return;
+        const msUntilRefresh = (exp - 60) * 1000 - Date.now();
+        if (msUntilRefresh <= 0) { doRefresh(); return; }
+        refreshTimer = setTimeout(doRefresh, msUntilRefresh);
+      }
+      document.querySelectorAll('form[action="/me/logout"]').forEach(function(form) {
+        form.addEventListener('submit', function() { clearTimeout(refreshTimer); });
+      });
+      async function doRefresh() {
+        try {
+          const resp = await fetch('/auth/refresh', { method: 'POST', credentials: 'same-origin' });
+          if (resp.ok) { scheduleRefresh(); }
+          else {
+            document.cookie = 'auth_exp=; Max-Age=0; Path=/; SameSite=Strict';
+            if (window.location.pathname !== '/') window.location.href = '/';
+          }
+        } catch (_) {}
+      }
+      scheduleRefresh();
+    })();
+  </script>
+</body>
+</html>

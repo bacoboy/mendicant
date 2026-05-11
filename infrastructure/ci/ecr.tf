@@ -51,9 +51,11 @@ resource "aws_ecr_lifecycle_policy" "auth_lambda_us_east_2" {
   policy     = local.ecr_lifecycle_policy
 }
 
-resource "aws_ecr_repository" "users_lambda_us_east_2" {
+resource "aws_ecr_repository" "user_lambda_us_east_2" {
   provider = aws.us_east_2
 
+  # AWS-facing name still uses the "users" prefix; only the Terraform identifier
+  # was renamed (avoids destroying images).
   name                 = "${local.prefix}-users-lambda"
   image_tag_mutability = "IMMUTABLE"
 
@@ -64,10 +66,20 @@ resource "aws_ecr_repository" "users_lambda_us_east_2" {
   tags = { app = local.app_name, environment = local.environment }
 }
 
-resource "aws_ecr_lifecycle_policy" "users_lambda_us_east_2" {
+resource "aws_ecr_lifecycle_policy" "user_lambda_us_east_2" {
   provider   = aws.us_east_2
-  repository = aws_ecr_repository.users_lambda_us_east_2.name
+  repository = aws_ecr_repository.user_lambda_us_east_2.name
   policy     = local.ecr_lifecycle_policy
+}
+
+moved {
+  from = aws_ecr_repository.users_lambda_us_east_2
+  to   = aws_ecr_repository.user_lambda_us_east_2
+}
+
+moved {
+  from = aws_ecr_lifecycle_policy.users_lambda_us_east_2
+  to   = aws_ecr_lifecycle_policy.user_lambda_us_east_2
 }
 
 # ── us-west-2 ─────────────────────────────────────────────────────────────────
@@ -91,7 +103,7 @@ resource "aws_ecr_lifecycle_policy" "auth_lambda_us_west_2" {
   policy     = local.ecr_lifecycle_policy
 }
 
-resource "aws_ecr_repository" "users_lambda_us_west_2" {
+resource "aws_ecr_repository" "user_lambda_us_west_2" {
   provider = aws.us_west_2
 
   name                 = "${local.prefix}-users-lambda"
@@ -104,8 +116,18 @@ resource "aws_ecr_repository" "users_lambda_us_west_2" {
   tags = { app = local.app_name, environment = local.environment }
 }
 
-resource "aws_ecr_lifecycle_policy" "users_lambda_us_west_2" {
+resource "aws_ecr_lifecycle_policy" "user_lambda_us_west_2" {
   provider   = aws.us_west_2
-  repository = aws_ecr_repository.users_lambda_us_west_2.name
+  repository = aws_ecr_repository.user_lambda_us_west_2.name
   policy     = local.ecr_lifecycle_policy
+}
+
+moved {
+  from = aws_ecr_repository.users_lambda_us_west_2
+  to   = aws_ecr_repository.user_lambda_us_west_2
+}
+
+moved {
+  from = aws_ecr_lifecycle_policy.users_lambda_us_west_2
+  to   = aws_ecr_lifecycle_policy.user_lambda_us_west_2
 }

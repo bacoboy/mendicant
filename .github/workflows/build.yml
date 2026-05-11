@@ -31,17 +31,17 @@ jobs:
           cache-from: type=gha,scope=auth-lambda
           cache-to: type=gha,scope=auth-lambda,mode=max
 
-      - name: Build users-lambda
+      - name: Build user-lambda
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: crates/users-lambda/Dockerfile
+          file: crates/user-lambda/Dockerfile
           platforms: linux/arm64
           pull: true
-          tags: users-lambda:${{ github.sha }}
-          outputs: type=docker,dest=/tmp/users-lambda.tar
-          cache-from: type=gha,scope=users-lambda
-          cache-to: type=gha,scope=users-lambda,mode=max
+          tags: user-lambda:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/user-lambda.tar
+          cache-from: type=gha,scope=user-lambda
+          cache-to: type=gha,scope=user-lambda,mode=max
 
       - name: Upload image artifacts
         uses: actions/upload-artifact@v7.0.1
@@ -75,7 +75,7 @@ jobs:
       - name: Load images into Docker
         run: |
           docker load --input /tmp/auth-lambda.tar
-          docker load --input /tmp/users-lambda.tar
+          docker load --input /tmp/user-lambda.tar
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -94,11 +94,11 @@ jobs:
           docker tag auth-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
 
-      - name: Push users-lambda
+      - name: Push user-lambda
         env:
-          REPO: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ matrix.region }}.amazonaws.com/mendicant-prod-users-lambda
+          REPO: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ matrix.region }}.amazonaws.com/mendicant-prod-user-lambda
         run: |
-          docker tag users-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
+          docker tag user-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
 
   # ── Summary ────────────────────────────────────────────────────────────────

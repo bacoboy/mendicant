@@ -30,7 +30,9 @@ data "aws_ecr_repository" "auth_lambda" {
   name = "${local.prefix}-auth-lambda"
 }
 
-data "aws_ecr_repository" "users_lambda" {
+data "aws_ecr_repository" "user_lambda" {
+  # NOTE: AWS-facing name is intentionally still "users-lambda" — the source-side
+  # identifier was renamed without forcing an ECR destroy+recreate.
   name = "${local.prefix}-users-lambda"
 }
 
@@ -38,7 +40,7 @@ locals {
   api_gw_id     = one(data.aws_apigatewayv2_apis.main.ids)
   exec_role_arn = data.aws_iam_role.lambda_exec.arn
   ecr_auth      = data.aws_ecr_repository.auth_lambda.repository_url
-  ecr_users     = data.aws_ecr_repository.users_lambda.repository_url
+  ecr_user      = data.aws_ecr_repository.user_lambda.repository_url
 
   # Temporary static invite code — replace with a DB-backed system when registration opens.
   invite_code = "mK9xP2nQ4w"

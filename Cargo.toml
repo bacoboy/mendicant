@@ -3,7 +3,7 @@ members = [
     "crates/domain",
     "crates/db",
     "crates/auth-lambda",
-    "crates/users-lambda",
+    "crates/user-lambda",
     "crates/bootstrap",
 ]
 resolver = "2"

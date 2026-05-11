@@ -14,7 +14,7 @@ use crate::state::AppState;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/admin/users/:id", patch(patch_user))
+        .route("/admin/users/{id}", patch(patch_user))
 }
 
 fn require_admin(auth: &AuthUser) -> Result<(), AppError> {
@@ -60,7 +60,7 @@ struct PatchUserRequest {
     status: Option<UserStatus>,
 }
 
-/// PATCH /admin/users/:id — update a user's role and/or status (Administrator role required).
+/// PATCH /admin/users/{id} — update a user's role and/or status (Administrator role required).
 async fn patch_user(
     State(state): State<AppState>,
     auth: AuthUser,

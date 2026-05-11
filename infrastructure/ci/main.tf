@@ -101,8 +101,8 @@ data "aws_iam_policy_document" "ecr_push" {
     resources = [
       aws_ecr_repository.auth_lambda_us_east_2.arn,
       aws_ecr_repository.auth_lambda_us_west_2.arn,
-      aws_ecr_repository.users_lambda_us_east_2.arn,
-      aws_ecr_repository.users_lambda_us_west_2.arn,
+      aws_ecr_repository.user_lambda_us_east_2.arn,
+      aws_ecr_repository.user_lambda_us_west_2.arn,
     ]
   }
 }

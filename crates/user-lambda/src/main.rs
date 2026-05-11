@@ -5,6 +5,7 @@ mod error;
 mod handlers;
 mod jwt;
 mod middleware;
+mod sse;
 mod state;
 
 use state::AppState;

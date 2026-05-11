@@ -50,9 +50,11 @@ resource "aws_lambda_permission" "auth_hotfix_apigw" {
   source_arn    = "arn:aws:execute-api:${local.region}:${data.aws_caller_identity.current.account_id}:${local.api_gw_id}/*/*"
 }
 
-# ── users-lambda hotfix ────────────────────────────────────────────────────────
+# ── user-lambda hotfix ─────────────────────────────────────────────────────────
+# AWS-facing function name still uses the "users" prefix for the same reason as
+# the main user-lambda function — avoiding a destroy+recreate.
 
-resource "aws_lambda_function" "users_hotfix" {
+resource "aws_lambda_function" "user_hotfix" {
   function_name = "${local.prefix}-users-hotfix-${local.region}"
   role          = local.exec_role_arn
   package_type  = "Zip"
@@ -78,10 +80,20 @@ resource "aws_lambda_function" "users_hotfix" {
   }
 }
 
-resource "aws_lambda_permission" "users_hotfix_apigw" {
+resource "aws_lambda_permission" "user_hotfix_apigw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.users_hotfix.function_name
+  function_name = aws_lambda_function.user_hotfix.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "arn:aws:execute-api:${local.region}:${data.aws_caller_identity.current.account_id}:${local.api_gw_id}/*/*"
+}
+
+moved {
+  from = aws_lambda_function.users_hotfix
+  to   = aws_lambda_function.user_hotfix
+}
+
+moved {
+  from = aws_lambda_permission.users_hotfix_apigw
+  to   = aws_lambda_permission.user_hotfix_apigw
 }

@@ -1,10 +1,10 @@
 [package]
-name = "users-lambda"
+name = "user-lambda"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "users-lambda"
+name = "user-lambda"
 path = "src/main.rs"
 
 [dependencies]
@@ -28,3 +28,5 @@ jsonwebtoken = { workspace = true }
 rsa = { workspace = true }
 base64 = { workspace = true }
 askama = { workspace = true }
+webauthn-rs = { workspace = true }
+openssl = { workspace = true }

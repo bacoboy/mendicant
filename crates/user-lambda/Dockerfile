@@ -6,8 +6,8 @@ COPY crates/ crates/
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo lambda build --release -p users-lambda --arm64 \
-    && cp /app/target/lambda/users-lambda/bootstrap /bootstrap
+    cargo lambda build --release -p user-lambda --arm64 \
+    && cp /app/target/lambda/user-lambda/bootstrap /bootstrap
 
 FROM public.ecr.aws/lambda/provided:al2023
 COPY --from=builder /bootstrap /var/runtime/bootstrap
