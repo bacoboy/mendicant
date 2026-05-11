@@ -86,12 +86,38 @@ resource "aws_lambda_permission" "user_hotfix_apigw" {
   source_arn    = "arn:aws:execute-api:${local.region}:${data.aws_caller_identity.current.account_id}:${local.api_gw_id}/*/*"
 }
 
-moved {
-  from = aws_lambda_function.users_hotfix
-  to   = aws_lambda_function.user_hotfix
+# ── admin-lambda hotfix ────────────────────────────────────────────────────────
+
+resource "aws_lambda_function" "admin_hotfix" {
+  function_name = "${local.prefix}-admin-hotfix-${local.region}"
+  role          = local.exec_role_arn
+  package_type  = "Zip"
+  runtime       = "provided.al2023"
+  handler       = "bootstrap"
+  filename      = data.archive_file.hotfix_placeholder.output_path
+  architectures = ["arm64"]
+  timeout       = 30
+  memory_size   = 256
+
+  environment {
+    variables = local.lambda_env
+  }
+
+  tags = {
+    app         = var.app_name
+    environment = var.environment
+    region      = local.region
+  }
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
 }
 
-moved {
-  from = aws_lambda_permission.users_hotfix_apigw
-  to   = aws_lambda_permission.user_hotfix_apigw
+resource "aws_lambda_permission" "admin_hotfix_apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.admin_hotfix.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:${local.region}:${data.aws_caller_identity.current.account_id}:${local.api_gw_id}/*/*"
 }

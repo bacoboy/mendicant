@@ -5,3 +5,7 @@ output "auth_hotfix_function_name" {
 output "user_hotfix_function_name" {
   value = aws_lambda_function.user_hotfix.function_name
 }
+
+output "admin_hotfix_function_name" {
+  value = aws_lambda_function.admin_hotfix.function_name
+}

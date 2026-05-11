@@ -1,0 +1,13 @@
+    <nav class="admin-sidenav">
+      <span class="admin-sidenav-section">overview</span>
+      <a href="/admin" class="admin-sidenav-link {% if active_section == "dashboard" %}active{% endif %}">dashboard</a>
+
+      <span class="admin-sidenav-section">users</span>
+      <a href="/admin/users" class="admin-sidenav-link {% if active_section == "users" %}active{% endif %}">all users</a>
+
+      <span class="admin-sidenav-section">tables</span>
+      <a href="/admin/tables/refresh-tokens" class="admin-sidenav-link sub {% if active_table == "refresh-tokens" %}active{% endif %}">refresh-tokens</a>
+      <a href="/admin/tables/challenges" class="admin-sidenav-link sub {% if active_table == "challenges" %}active{% endif %}">challenges</a>
+      <a href="/admin/tables/email-tokens" class="admin-sidenav-link sub {% if active_table == "email-tokens" %}active{% endif %}">email-tokens</a>
+      <a href="/admin/tables/oauth-devices" class="admin-sidenav-link sub {% if active_table == "oauth-devices" %}active{% endif %}">oauth-devices</a>
+    </nav>

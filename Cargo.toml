@@ -4,6 +4,7 @@ members = [
     "crates/db",
     "crates/auth-lambda",
     "crates/user-lambda",
+    "crates/admin-lambda",
     "crates/bootstrap",
 ]
 resolver = "2"

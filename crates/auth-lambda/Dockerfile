@@ -12,6 +12,7 @@ COPY crates/domain/Cargo.toml       crates/domain/
 COPY crates/db/Cargo.toml           crates/db/
 COPY crates/auth-lambda/Cargo.toml  crates/auth-lambda/
 COPY crates/user-lambda/Cargo.toml  crates/user-lambda/
+COPY crates/admin-lambda/Cargo.toml crates/admin-lambda/
 COPY crates/bootstrap/Cargo.toml    crates/bootstrap/
 
 RUN mkdir -p \
@@ -19,12 +20,14 @@ RUN mkdir -p \
         crates/db/src \
         crates/auth-lambda/src \
         crates/user-lambda/src \
+        crates/admin-lambda/src \
         crates/bootstrap/src \
     && touch crates/domain/src/lib.rs \
              crates/db/src/lib.rs \
     && printf 'fn main() {}\n' | tee \
         crates/auth-lambda/src/main.rs \
         crates/user-lambda/src/main.rs \
+        crates/admin-lambda/src/main.rs \
         crates/bootstrap/src/main.rs > /dev/null
 
 RUN --mount=type=cache,target=/root/.cargo/registry \

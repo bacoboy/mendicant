@@ -71,6 +71,25 @@ resource "aws_ecr_lifecycle_policy" "user_lambda_us_east_2" {
   policy     = local.ecr_lifecycle_policy
 }
 
+resource "aws_ecr_repository" "admin_lambda_us_east_2" {
+  provider = aws.us_east_2
+
+  name                 = "${local.prefix}-admin-lambda"
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = { app = local.app_name, environment = local.environment }
+}
+
+resource "aws_ecr_lifecycle_policy" "admin_lambda_us_east_2" {
+  provider   = aws.us_east_2
+  repository = aws_ecr_repository.admin_lambda_us_east_2.name
+  policy     = local.ecr_lifecycle_policy
+}
+
 # ── us-west-2 ─────────────────────────────────────────────────────────────────
 
 resource "aws_ecr_repository" "auth_lambda_us_west_2" {
@@ -109,5 +128,24 @@ resource "aws_ecr_repository" "user_lambda_us_west_2" {
 resource "aws_ecr_lifecycle_policy" "user_lambda_us_west_2" {
   provider   = aws.us_west_2
   repository = aws_ecr_repository.user_lambda_us_west_2.name
+  policy     = local.ecr_lifecycle_policy
+}
+
+resource "aws_ecr_repository" "admin_lambda_us_west_2" {
+  provider = aws.us_west_2
+
+  name                 = "${local.prefix}-admin-lambda"
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = { app = local.app_name, environment = local.environment }
+}
+
+resource "aws_ecr_lifecycle_policy" "admin_lambda_us_west_2" {
+  provider   = aws.us_west_2
+  repository = aws_ecr_repository.admin_lambda_us_west_2.name
   policy     = local.ecr_lifecycle_policy
 }

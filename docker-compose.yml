@@ -35,9 +35,38 @@ services:
     depends_on:
       - dynamodb-local
 
+  # ── admin-lambda ─────────────────────────────────────────────────────────────
+  # Administrator-only surface (/admin/*). Physically isolated from the user
+  # path: a coding mistake on this lambda cannot leak into regular user flows.
+  # Every request is gated by a router-level require_admin middleware.
+  admin-lambda:
+    build:
+      context: .
+      dockerfile: crates/admin-lambda/Dockerfile
+    volumes:
+      - ./dev-key.pem:/var/task/dev-key.pem
+    environment:
+      DYNAMODB_ENDPOINT_URL: http://dynamodb-local:8000
+      JWT_SIGNING_KEY_PATH: /var/task/dev-key.pem
+      BASE_URL: https://localhost:9001
+      TABLE_USERS: users
+      TABLE_CREDENTIALS: credentials
+      TABLE_REFRESH_TOKENS: refresh_tokens
+      TABLE_CHALLENGES: challenges
+      TABLE_EMAIL_TOKENS: email_tokens
+      TABLE_OAUTH_DEVICES: oauth_devices
+      ENVIRONMENT: dev
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-2
+      NO_PROXY: dynamodb-local
+      no_proxy: dynamodb-local
+    depends_on:
+      - dynamodb-local
+
   # ── user-lambda ──────────────────────────────────────────────────────────────
-  # Operates on the authenticated user (/me/* and PATCH /admin/users/{id}).
-  # Does not sign JWTs — only verifies them via the shared decoding key.
+  # Operates on the authenticated user (/me/*). Does not sign JWTs — only
+  # verifies them via the shared decoding key.
   user-lambda:
     build:
       context: .
@@ -88,6 +117,17 @@ services:
     depends_on:
       - user-lambda
 
+  admin-apigw:
+    build:
+      context: tools/local-apigw
+    environment:
+      LAMBDA_ENDPOINT: http://admin-lambda:8080/2015-03-31/functions/function/invocations
+      RUST_LOG: local_apigw=info
+      NO_PROXY: admin-lambda
+      no_proxy: admin-lambda
+    depends_on:
+      - admin-lambda
+
   # HTTPS reverse proxy. Required for Safari WebAuthn (navigator.credentials needs HTTPS).
   # Path-routes /me/* to user-apigw and everything else to auth-apigw.
   # Accept the browser cert warning on first use, or run: docker compose exec caddy caddy trust
@@ -102,11 +142,12 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     environment:
-      NO_PROXY: auth-apigw,user-apigw
-      no_proxy: auth-apigw,user-apigw
+      NO_PROXY: auth-apigw,user-apigw,admin-apigw
+      no_proxy: auth-apigw,user-apigw,admin-apigw
     depends_on:
       - auth-apigw
       - user-apigw
+      - admin-apigw
 
 volumes:
   caddy_data:

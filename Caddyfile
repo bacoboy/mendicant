@@ -5,9 +5,9 @@
 }
 
 # Shared route matchers (apply to both http and https blocks via snippets).
-# /me and /me/* → user-apigw
-# PATCH /admin/users/* → user-apigw (will move to admin-lambda in phase 2)
-# everything else → auth-apigw
+# /me, /me/*           → user-apigw  (current user surface)
+# /admin, /admin/*     → admin-apigw (admin-only surface)
+# everything else      → auth-apigw  (auth flows + public pages + static)
 
 (routes) {
     handle /static/* {
@@ -20,12 +20,9 @@
         reverse_proxy user-apigw:3000
     }
 
-    @admin_users_patch {
-        path /admin/users/*
-        method PATCH
-    }
-    handle @admin_users_patch {
-        reverse_proxy user-apigw:3000
+    @admin_routes path /admin /admin/*
+    handle @admin_routes {
+        reverse_proxy admin-apigw:3000
     }
 
     handle {

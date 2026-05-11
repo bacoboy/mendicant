@@ -34,11 +34,16 @@ data "aws_ecr_repository" "user_lambda" {
   name = "${local.prefix}-user-lambda"
 }
 
+data "aws_ecr_repository" "admin_lambda" {
+  name = "${local.prefix}-admin-lambda"
+}
+
 locals {
   api_gw_id     = one(data.aws_apigatewayv2_apis.main.ids)
   exec_role_arn = data.aws_iam_role.lambda_exec.arn
   ecr_auth      = data.aws_ecr_repository.auth_lambda.repository_url
   ecr_user      = data.aws_ecr_repository.user_lambda.repository_url
+  ecr_admin     = data.aws_ecr_repository.admin_lambda.repository_url
 
   # Temporary static invite code — replace with a DB-backed system when registration opens.
   invite_code = "mK9xP2nQ4w"

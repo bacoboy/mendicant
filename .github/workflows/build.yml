@@ -43,6 +43,18 @@ jobs:
           cache-from: type=gha,scope=user-lambda
           cache-to: type=gha,scope=user-lambda,mode=max
 
+      - name: Build admin-lambda
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: crates/admin-lambda/Dockerfile
+          platforms: linux/arm64
+          pull: true
+          tags: admin-lambda:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/admin-lambda.tar
+          cache-from: type=gha,scope=admin-lambda
+          cache-to: type=gha,scope=admin-lambda,mode=max
+
       - name: Upload image artifacts
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -76,6 +88,7 @@ jobs:
         run: |
           docker load --input /tmp/auth-lambda.tar
           docker load --input /tmp/user-lambda.tar
+          docker load --input /tmp/admin-lambda.tar
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -99,6 +112,13 @@ jobs:
           REPO: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ matrix.region }}.amazonaws.com/mendicant-prod-user-lambda
         run: |
           docker tag user-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
+          docker push $REPO:sha-${{ github.sha }}
+
+      - name: Push admin-lambda
+        env:
+          REPO: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ matrix.region }}.amazonaws.com/mendicant-prod-admin-lambda
+        run: |
+          docker tag admin-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
 
   # ── Summary ────────────────────────────────────────────────────────────────

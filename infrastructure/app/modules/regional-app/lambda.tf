@@ -91,15 +91,13 @@ resource "aws_apigatewayv2_integration" "user" {
   payload_format_version = "2.0"
 }
 
-# Explicit routes for user-lambda. Everything else falls through to $default (auth-lambda).
-# `ANY /me` covers the bare path; `ANY /me/{proxy+}` covers all child paths.
-# `PATCH /admin/users/{id}` is the only admin route handled here; the rest of
-# /admin/* stays with auth-lambda until admin-lambda lands in phase 2.
+# Explicit routes for user-lambda. `ANY /me` covers the bare path;
+# `ANY /me/{proxy+}` covers all child paths. Everything not matched here or
+# on the admin routes below falls through to $default (auth-lambda).
 resource "aws_apigatewayv2_route" "user_routes" {
   for_each = toset([
     "ANY /me",
     "ANY /me/{proxy+}",
-    "PATCH /admin/users/{id}",
   ])
 
   api_id    = local.api_gw_id
@@ -107,24 +105,53 @@ resource "aws_apigatewayv2_route" "user_routes" {
   target    = "integrations/${aws_apigatewayv2_integration.user.id}"
 }
 
-# State migrations for the user-lambda rename (source identifier change only —
-# AWS-facing names are unchanged, so these are no-op renames in AWS).
-moved {
-  from = aws_lambda_function.users
-  to   = aws_lambda_function.user
+# ── admin-lambda ──────────────────────────────────────────────────────────────
+
+resource "aws_lambda_function" "admin" {
+  function_name = "${local.prefix}-admin-${local.region}"
+  role          = local.exec_role_arn
+  package_type  = "Image"
+  image_uri     = "${local.ecr_admin}:${var.image_tag}"
+  architectures = ["arm64"]
+  timeout       = 30
+  memory_size   = 256
+
+  environment {
+    variables = local.lambda_env
+  }
+
+  tags = {
+    app         = var.app_name
+    environment = var.environment
+    region      = local.region
+  }
 }
 
-moved {
-  from = aws_lambda_permission.users_apigw
-  to   = aws_lambda_permission.user_apigw
+resource "aws_lambda_permission" "admin_apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.admin.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:${local.region}:${data.aws_caller_identity.current.account_id}:${local.api_gw_id}/*/*"
 }
 
-moved {
-  from = aws_apigatewayv2_integration.users
-  to   = aws_apigatewayv2_integration.user
+resource "aws_apigatewayv2_integration" "admin" {
+  api_id                 = local.api_gw_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.admin.invoke_arn
+  payload_format_version = "2.0"
 }
 
-moved {
-  from = aws_apigatewayv2_route.users_routes
-  to   = aws_apigatewayv2_route.user_routes
+# Admin surface — physically isolated from the regular user path. Every
+# request is gated by a router-level require_admin middleware inside the
+# lambda, on top of the API Gateway match.
+resource "aws_apigatewayv2_route" "admin_routes" {
+  for_each = toset([
+    "ANY /admin",
+    "ANY /admin/{proxy+}",
+  ])
+
+  api_id    = local.api_gw_id
+  route_key = each.key
+  target    = "integrations/${aws_apigatewayv2_integration.admin.id}"
 }
