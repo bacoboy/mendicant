@@ -54,10 +54,9 @@ resource "aws_ecr_lifecycle_policy" "auth_lambda_us_east_2" {
 resource "aws_ecr_repository" "user_lambda_us_east_2" {
   provider = aws.us_east_2
 
-  # AWS-facing name still uses the "users" prefix; only the Terraform identifier
-  # was renamed (avoids destroying images).
-  name                 = "${local.prefix}-users-lambda"
+  name                 = "${local.prefix}-user-lambda"
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = true # safety: destroy even with images present (relevant on first apply, the old "users-lambda" repo is being replaced)
 
   image_scanning_configuration {
     scan_on_push = true
@@ -70,16 +69,6 @@ resource "aws_ecr_lifecycle_policy" "user_lambda_us_east_2" {
   provider   = aws.us_east_2
   repository = aws_ecr_repository.user_lambda_us_east_2.name
   policy     = local.ecr_lifecycle_policy
-}
-
-moved {
-  from = aws_ecr_repository.users_lambda_us_east_2
-  to   = aws_ecr_repository.user_lambda_us_east_2
-}
-
-moved {
-  from = aws_ecr_lifecycle_policy.users_lambda_us_east_2
-  to   = aws_ecr_lifecycle_policy.user_lambda_us_east_2
 }
 
 # ── us-west-2 ─────────────────────────────────────────────────────────────────
@@ -106,8 +95,9 @@ resource "aws_ecr_lifecycle_policy" "auth_lambda_us_west_2" {
 resource "aws_ecr_repository" "user_lambda_us_west_2" {
   provider = aws.us_west_2
 
-  name                 = "${local.prefix}-users-lambda"
+  name                 = "${local.prefix}-user-lambda"
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -120,14 +110,4 @@ resource "aws_ecr_lifecycle_policy" "user_lambda_us_west_2" {
   provider   = aws.us_west_2
   repository = aws_ecr_repository.user_lambda_us_west_2.name
   policy     = local.ecr_lifecycle_policy
-}
-
-moved {
-  from = aws_ecr_repository.users_lambda_us_west_2
-  to   = aws_ecr_repository.user_lambda_us_west_2
-}
-
-moved {
-  from = aws_ecr_lifecycle_policy.users_lambda_us_west_2
-  to   = aws_ecr_lifecycle_policy.user_lambda_us_west_2
 }

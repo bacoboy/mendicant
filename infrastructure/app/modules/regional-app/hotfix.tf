@@ -51,11 +51,9 @@ resource "aws_lambda_permission" "auth_hotfix_apigw" {
 }
 
 # ── user-lambda hotfix ─────────────────────────────────────────────────────────
-# AWS-facing function name still uses the "users" prefix for the same reason as
-# the main user-lambda function — avoiding a destroy+recreate.
 
 resource "aws_lambda_function" "user_hotfix" {
-  function_name = "${local.prefix}-users-hotfix-${local.region}"
+  function_name = "${local.prefix}-user-hotfix-${local.region}"
   role          = local.exec_role_arn
   package_type  = "Zip"
   runtime       = "provided.al2023"

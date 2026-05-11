@@ -31,9 +31,7 @@ data "aws_ecr_repository" "auth_lambda" {
 }
 
 data "aws_ecr_repository" "user_lambda" {
-  # NOTE: AWS-facing name is intentionally still "users-lambda" — the source-side
-  # identifier was renamed without forcing an ECR destroy+recreate.
-  name = "${local.prefix}-users-lambda"
+  name = "${local.prefix}-user-lambda"
 }
 
 locals {

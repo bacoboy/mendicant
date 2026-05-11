@@ -63,9 +63,9 @@ swap_region() {
     local region=$1
 
     local prod_auth_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-auth-${region}"
-    local prod_users_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-users-${region}"
+    local prod_users_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-user-${region}"
     local hotfix_auth_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-auth-hotfix-${region}"
-    local hotfix_users_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-users-hotfix-${region}"
+    local hotfix_users_arn="arn:aws:lambda:${region}:${ACCOUNT_ID}:function:${PREFIX}-user-hotfix-${region}"
 
     echo "==> [${region}] Finding API Gateway..."
     local api_id

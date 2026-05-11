@@ -2,17 +2,13 @@
 #
 # Route ownership:
 #   auth-lambda — establishes JWTs: /auth/*, /oauth/*, /enroll*, /.well-known/*,
-#                 public HTML pages, static assets, admin user-management UI.
-#   user-lambda — needs JWT, acts on the current user: /me, /me/*, plus the
-#                 admin PATCH /admin/users/{id} (will move to admin-lambda in phase 2).
+#                 public HTML pages, static assets.
+#   user-lambda — needs JWT, acts on the current user: /me, /me/*.
+#   admin-lambda — admin-only surface (added in phase 2): /admin/*.
 #
 # Routing strategy: $default catches everything for auth-lambda; explicit
-# routes carve out the user-lambda surface (API GW picks most-specific match).
-#
-# Note: AWS-facing resource names (function_name, ECR repo name) still use the
-# plural "users" prefix from the original layout. Source-side identifiers were
-# renamed to the singular user_lambda; the AWS rename is intentionally deferred
-# to avoid an ECR destroy+recreate that would wipe stored images.
+# routes carve out the user-lambda and admin-lambda surfaces (API GW picks
+# the most-specific match).
 
 # ── auth-lambda ───────────────────────────────────────────────────────────────
 
@@ -61,7 +57,7 @@ resource "aws_apigatewayv2_route" "auth_default" {
 # ── user-lambda ───────────────────────────────────────────────────────────────
 
 resource "aws_lambda_function" "user" {
-  function_name = "${local.prefix}-users-${local.region}"
+  function_name = "${local.prefix}-user-${local.region}"
   role          = local.exec_role_arn
   package_type  = "Image"
   image_uri     = "${local.ecr_user}:${var.image_tag}"
