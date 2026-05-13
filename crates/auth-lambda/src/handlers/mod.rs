@@ -2,14 +2,8 @@ use axum::Router;
 
 use crate::state::AppState;
 
-#[allow(dead_code)]
-pub(crate) struct NavUser {
-    pub email: String,
-    pub is_admin: bool,
-}
-
-mod admin;
 mod auth;
+mod enroll;
 mod oauth;
 mod pages;
 mod static_files;
@@ -19,7 +13,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(pages::routes())
         .merge(auth::routes())
-        .merge(admin::routes())
+        .merge(enroll::routes())
         .merge(oauth::routes())
         .merge(well_known::routes())
         .merge(static_files::routes())

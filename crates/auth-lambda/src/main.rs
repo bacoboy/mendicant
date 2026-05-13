@@ -5,7 +5,6 @@ mod error;
 mod handlers;
 mod jwt;
 mod mailer;
-mod middleware;
 mod signing;
 mod sse;
 mod state;

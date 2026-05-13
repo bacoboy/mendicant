@@ -8,7 +8,6 @@ pub(crate) struct NavUser {
     pub is_admin: bool,
 }
 
-mod admin;
 mod credentials;
 mod passkey;
 mod profile;
@@ -20,7 +19,6 @@ pub fn routes() -> Router<AppState> {
         .merge(passkey::routes())
         .merge(sessions::routes())
         .merge(credentials::routes())
-        .merge(admin::routes())
 }
 
 pub(crate) fn is_secure_context() -> bool {
