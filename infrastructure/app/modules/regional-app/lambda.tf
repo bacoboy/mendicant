@@ -4,11 +4,11 @@
 #   auth-lambda — establishes JWTs: /auth/*, /oauth/*, /enroll*, /.well-known/*,
 #                 public HTML pages, static assets.
 #   user-lambda — needs JWT, acts on the current user: /me, /me/*.
-#   admin-lambda — admin-only surface (added in phase 2): /admin/*.
+#   admin-lambda — admin-only surface: /admin/*.
 #
-# Routing strategy: $default catches everything for auth-lambda; explicit
-# routes carve out the user-lambda and admin-lambda surfaces (API GW picks
-# the most-specific match).
+# Routing strategy: every reachable path has an explicit route. There is no
+# $default — anything unmatched returns a free 404 from API Gateway with no
+# Lambda invocation.
 
 # ── auth-lambda ───────────────────────────────────────────────────────────────
 
@@ -47,10 +47,38 @@ resource "aws_apigatewayv2_integration" "auth" {
   payload_format_version = "2.0"
 }
 
-# Catch-all — auth-lambda handles everything not matched by a more specific route.
-resource "aws_apigatewayv2_route" "auth_default" {
+# Explicit auth-lambda routes. Keep this set in sync with the routes registered
+# in crates/auth-lambda/src/handlers/*.rs. Anything not listed here returns a
+# 404 from API Gateway with no Lambda invocation.
+resource "aws_apigatewayv2_route" "auth_routes" {
+  for_each = toset([
+    # Auth + identity flows
+    "ANY /auth/{proxy+}",
+    "ANY /oauth/{proxy+}",
+    "ANY /enroll",
+    "ANY /enroll/{proxy+}",
+    "ANY /activate",
+    "GET /.well-known/jwks.json",
+
+    # Public HTML pages
+    "GET /",
+    "GET /login",
+    "GET /register",
+    "GET /register-confirm",
+    "GET /recover",
+
+    # Static assets + browser-requested root files
+    "GET /static/{proxy+}",
+    "GET /robots.txt",
+    "GET /favicon.svg",
+    "GET /favicon.ico",
+    "GET /favicon-32x32.png",
+    "GET /favicon-192.png",
+    "GET /apple-touch-icon.png",
+  ])
+
   api_id    = local.api_gw_id
-  route_key = "$default"
+  route_key = each.key
   target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
 }
 
