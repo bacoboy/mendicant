@@ -121,7 +121,7 @@
 
 {% block scripts %}
 <script>
-  const userId = {{ user_id|json }};
+  const userId = {{ user_id|json|safe }};
 
   function showError(msg) {
     const el = document.getElementById('action-error');

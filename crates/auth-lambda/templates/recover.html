@@ -10,7 +10,7 @@
 
 {% block pre_content %}
   <script>
-    window.__recoveryToken = {{ token|json }};
+    window.__recoveryToken = {{ token|json|safe }};
   </script>
 {% endblock %}
 
