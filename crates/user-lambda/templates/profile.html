@@ -59,7 +59,15 @@
 
             <div class="profile-field">
               <dt>Status</dt>
-              <dd><span class="profile-field-value">{{ status }}</span></dd>
+              <dd>
+                {% if status == "suspended" %}
+                <span class="badge badge-suspended">suspended</span>
+                {% else if status == "pending_verification" %}
+                <span class="badge badge-regional">pending verification</span>
+                {% else %}
+                <span class="badge badge-active">{{ status }}</span>
+                {% endif %}
+              </dd>
             </div>
 
           </dl>
