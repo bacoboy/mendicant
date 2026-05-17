@@ -60,7 +60,7 @@ impl User {
             email,
             display_name,
             role: Role::Free,
-            status: UserStatus::PendingVerification,
+            status: UserStatus::Active,
             created_at: now,
             updated_at: now,
         }
@@ -77,7 +77,7 @@ mod tests {
         assert_eq!(u.email, "alice@example.com");
         assert_eq!(u.display_name, "Alice");
         assert_eq!(u.role, Role::Free);
-        assert_eq!(u.status, UserStatus::PendingVerification);
+        assert_eq!(u.status, UserStatus::Active);
         assert_eq!(u.created_at, u.updated_at);
     }
 

@@ -271,8 +271,13 @@ async function doRegisterEmail(ctx, email) {
       return;
     }
 
-    // Success: redirect to confirm page with token
-    window.location.href = `/register-confirm?token=${data.token}`;
+    if (data.token) {
+      // Dev mode: token returned directly, redirect immediately.
+      window.location.href = `/register-confirm?token=${data.token}`;
+    } else {
+      // Production: email was sent via SES, ask user to check inbox.
+      setSignal('emailSent', true);
+    }
   } catch (e) {
     setSignal('emailError', `Error: ${e.message}`);
   }

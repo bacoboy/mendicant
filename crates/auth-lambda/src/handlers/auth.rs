@@ -50,7 +50,8 @@ struct RegisterEmailRequest {
 
 #[derive(Serialize)]
 struct RegisterEmailResponse {
-    token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -116,9 +117,8 @@ async fn register_email(
             )
         })?;
 
-    Ok(Json(RegisterEmailResponse {
-        token: token_id,
-    }))
+    let dev_token = matches!(state.mailer, crate::mailer::Mailer::Stdout).then_some(token_id);
+    Ok(Json(RegisterEmailResponse { token: dev_token }))
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────
@@ -474,6 +474,16 @@ async fn login_complete(
         .await
         .context("failed to load user")?;
 
+    match user.status {
+        domain::user::UserStatus::Active => {}
+        domain::user::UserStatus::Suspended => {
+            return Err(AppError::BadRequest("account suspended".into()));
+        }
+        domain::user::UserStatus::PendingVerification => {
+            return Err(AppError::BadRequest("account not yet verified".into()));
+        }
+    }
+
     let client_hint = ua_hint(&headers);
     let tokens = issue_tokens(
         &user.id,
@@ -618,6 +628,10 @@ async fn recover_complete(
         .get(&user_id)
         .await
         .context("failed to load user for recovery")?;
+
+    if user.status == domain::user::UserStatus::Suspended {
+        return Err(AppError::BadRequest("account suspended".into()));
+    }
 
     let cred_id = CredentialId(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(passkey.cred_id()),
