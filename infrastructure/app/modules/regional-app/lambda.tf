@@ -16,7 +16,7 @@ resource "aws_lambda_function" "auth" {
   function_name = "${local.prefix}-auth-${local.region}"
   role          = local.exec_role_arn
   package_type  = "Image"
-  image_uri     = "${local.ecr_auth}:${var.auth_image_tag}"
+  image_uri     = "${local.ecr_auth}:${var.image_tag}"
   architectures = ["arm64"]
   timeout       = 30
   memory_size   = 256
@@ -88,7 +88,7 @@ resource "aws_lambda_function" "user" {
   function_name = "${local.prefix}-user-${local.region}"
   role          = local.exec_role_arn
   package_type  = "Image"
-  image_uri     = "${local.ecr_user}:${var.user_image_tag}"
+  image_uri     = "${local.ecr_user}:${var.image_tag}"
   architectures = ["arm64"]
   timeout       = 30
   memory_size   = 256
@@ -139,7 +139,7 @@ resource "aws_lambda_function" "admin" {
   function_name = "${local.prefix}-admin-${local.region}"
   role          = local.exec_role_arn
   package_type  = "Image"
-  image_uri     = "${local.ecr_admin}:${var.admin_image_tag}"
+  image_uri     = "${local.ecr_admin}:${var.image_tag}"
   architectures = ["arm64"]
   timeout       = 30
   memory_size   = 256

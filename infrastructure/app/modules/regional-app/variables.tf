@@ -6,18 +6,8 @@ variable "environment" {
   type = string
 }
 
-variable "auth_image_tag" {
-  description = "ECR image tag for auth-lambda (e.g. sha-abc1234)."
-  type        = string
-}
-
-variable "user_image_tag" {
-  description = "ECR image tag for user-lambda (e.g. sha-abc1234)."
-  type        = string
-}
-
-variable "admin_image_tag" {
-  description = "ECR image tag for admin-lambda (e.g. sha-abc1234)."
+variable "image_tag" {
+  description = "ECR image tag to deploy (e.g. sha-abc1234)."
   type        = string
 }
 

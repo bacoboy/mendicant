@@ -8,19 +8,59 @@ env:
   AWS_ACCOUNT_ID: "054297229654"
 
 jobs:
-  # ── Build and push auth-lambda ─────────────────────────────────────────────
+  # ── Detect changed crates ──────────────────────────────────────────────────
+  # Each lambda only rebuilds when its own source or a shared crate changes.
+  # Shared crates (domain, db) trigger rebuilds of all three lambdas.
+  # Unchanged lambdas are retagged via the ECR API using ci-<branch> as a
+  # stable pointer — no image data transferred, no compilation.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.filter.outputs.auth }}
+      user: ${{ steps.filter.outputs.user }}
+      admin: ${{ steps.filter.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            auth:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'crates/domain/**'
+              - 'crates/db/**'
+              - 'crates/auth-lambda/**'
+            user:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'crates/domain/**'
+              - 'crates/db/**'
+              - 'crates/user-lambda/**'
+            admin:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'crates/domain/**'
+              - 'crates/db/**'
+              - 'crates/admin-lambda/**'
+
+  # ── auth-lambda ────────────────────────────────────────────────────────────
   build-auth:
-    runs-on: ubuntu-24.04-arm
+    needs: changes
+    runs-on: ${{ needs.changes.outputs.auth == 'true' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v6.0.2
+        if: needs.changes.outputs.auth == 'true'
 
       - name: Set up Docker Buildx
+        if: needs.changes.outputs.auth == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Build auth-lambda
+        if: needs.changes.outputs.auth == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -39,13 +79,31 @@ jobs:
           aws-region: us-east-2
 
       - name: Log in to ECR (us-east-2)
+        if: needs.changes.outputs.auth == 'true'
         uses: aws-actions/amazon-ecr-login@v2.1.4
 
       - name: Push auth-lambda to us-east-2
+        if: needs.changes.outputs.auth == 'true'
         run: |
           REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-2.amazonaws.com/mendicant-prod-auth-lambda
           docker tag auth-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
+          docker tag auth-lambda:${{ github.sha }} $REPO:ci-${{ github.ref_name }}
+          docker push $REPO:ci-${{ github.ref_name }}
+
+      - name: Retag auth-lambda in us-east-2 (unchanged)
+        if: needs.changes.outputs.auth != 'true'
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --region us-east-2 \
+            --repository-name mendicant-prod-auth-lambda \
+            --image-ids imageTag=ci-${{ github.ref_name }} \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image \
+            --region us-east-2 \
+            --repository-name mendicant-prod-auth-lambda \
+            --image-tag sha-${{ github.sha }} \
+            --image-manifest "$MANIFEST"
 
       - name: Configure AWS credentials (us-west-2)
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -54,27 +112,49 @@ jobs:
           aws-region: us-west-2
 
       - name: Log in to ECR (us-west-2)
+        if: needs.changes.outputs.auth == 'true'
         uses: aws-actions/amazon-ecr-login@v2.1.4
 
       - name: Push auth-lambda to us-west-2
+        if: needs.changes.outputs.auth == 'true'
         run: |
           REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/mendicant-prod-auth-lambda
           docker tag auth-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
+          docker tag auth-lambda:${{ github.sha }} $REPO:ci-${{ github.ref_name }}
+          docker push $REPO:ci-${{ github.ref_name }}
 
-  # ── Build and push user-lambda ─────────────────────────────────────────────
+      - name: Retag auth-lambda in us-west-2 (unchanged)
+        if: needs.changes.outputs.auth != 'true'
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --region us-west-2 \
+            --repository-name mendicant-prod-auth-lambda \
+            --image-ids imageTag=ci-${{ github.ref_name }} \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image \
+            --region us-west-2 \
+            --repository-name mendicant-prod-auth-lambda \
+            --image-tag sha-${{ github.sha }} \
+            --image-manifest "$MANIFEST"
+
+  # ── user-lambda ────────────────────────────────────────────────────────────
   build-user:
-    runs-on: ubuntu-24.04-arm
+    needs: changes
+    runs-on: ${{ needs.changes.outputs.user == 'true' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v6.0.2
+        if: needs.changes.outputs.user == 'true'
 
       - name: Set up Docker Buildx
+        if: needs.changes.outputs.user == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Build user-lambda
+        if: needs.changes.outputs.user == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -93,13 +173,31 @@ jobs:
           aws-region: us-east-2
 
       - name: Log in to ECR (us-east-2)
+        if: needs.changes.outputs.user == 'true'
         uses: aws-actions/amazon-ecr-login@v2.1.4
 
       - name: Push user-lambda to us-east-2
+        if: needs.changes.outputs.user == 'true'
         run: |
           REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-2.amazonaws.com/mendicant-prod-user-lambda
           docker tag user-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
+          docker tag user-lambda:${{ github.sha }} $REPO:ci-${{ github.ref_name }}
+          docker push $REPO:ci-${{ github.ref_name }}
+
+      - name: Retag user-lambda in us-east-2 (unchanged)
+        if: needs.changes.outputs.user != 'true'
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --region us-east-2 \
+            --repository-name mendicant-prod-user-lambda \
+            --image-ids imageTag=ci-${{ github.ref_name }} \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image \
+            --region us-east-2 \
+            --repository-name mendicant-prod-user-lambda \
+            --image-tag sha-${{ github.sha }} \
+            --image-manifest "$MANIFEST"
 
       - name: Configure AWS credentials (us-west-2)
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -108,27 +206,49 @@ jobs:
           aws-region: us-west-2
 
       - name: Log in to ECR (us-west-2)
+        if: needs.changes.outputs.user == 'true'
         uses: aws-actions/amazon-ecr-login@v2.1.4
 
       - name: Push user-lambda to us-west-2
+        if: needs.changes.outputs.user == 'true'
         run: |
           REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/mendicant-prod-user-lambda
           docker tag user-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
+          docker tag user-lambda:${{ github.sha }} $REPO:ci-${{ github.ref_name }}
+          docker push $REPO:ci-${{ github.ref_name }}
 
-  # ── Build and push admin-lambda ────────────────────────────────────────────
+      - name: Retag user-lambda in us-west-2 (unchanged)
+        if: needs.changes.outputs.user != 'true'
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --region us-west-2 \
+            --repository-name mendicant-prod-user-lambda \
+            --image-ids imageTag=ci-${{ github.ref_name }} \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image \
+            --region us-west-2 \
+            --repository-name mendicant-prod-user-lambda \
+            --image-tag sha-${{ github.sha }} \
+            --image-manifest "$MANIFEST"
+
+  # ── admin-lambda ───────────────────────────────────────────────────────────
   build-admin:
-    runs-on: ubuntu-24.04-arm
+    needs: changes
+    runs-on: ${{ needs.changes.outputs.admin == 'true' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v6.0.2
+        if: needs.changes.outputs.admin == 'true'
 
       - name: Set up Docker Buildx
+        if: needs.changes.outputs.admin == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Build admin-lambda
+        if: needs.changes.outputs.admin == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -147,13 +267,31 @@ jobs:
           aws-region: us-east-2
 
       - name: Log in to ECR (us-east-2)
+        if: needs.changes.outputs.admin == 'true'
         uses: aws-actions/amazon-ecr-login@v2.1.4
 
       - name: Push admin-lambda to us-east-2
+        if: needs.changes.outputs.admin == 'true'
         run: |
           REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-2.amazonaws.com/mendicant-prod-admin-lambda
           docker tag admin-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
+          docker tag admin-lambda:${{ github.sha }} $REPO:ci-${{ github.ref_name }}
+          docker push $REPO:ci-${{ github.ref_name }}
+
+      - name: Retag admin-lambda in us-east-2 (unchanged)
+        if: needs.changes.outputs.admin != 'true'
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --region us-east-2 \
+            --repository-name mendicant-prod-admin-lambda \
+            --image-ids imageTag=ci-${{ github.ref_name }} \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image \
+            --region us-east-2 \
+            --repository-name mendicant-prod-admin-lambda \
+            --image-tag sha-${{ github.sha }} \
+            --image-manifest "$MANIFEST"
 
       - name: Configure AWS credentials (us-west-2)
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -162,13 +300,31 @@ jobs:
           aws-region: us-west-2
 
       - name: Log in to ECR (us-west-2)
+        if: needs.changes.outputs.admin == 'true'
         uses: aws-actions/amazon-ecr-login@v2.1.4
 
       - name: Push admin-lambda to us-west-2
+        if: needs.changes.outputs.admin == 'true'
         run: |
           REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/mendicant-prod-admin-lambda
           docker tag admin-lambda:${{ github.sha }} $REPO:sha-${{ github.sha }}
           docker push $REPO:sha-${{ github.sha }}
+          docker tag admin-lambda:${{ github.sha }} $REPO:ci-${{ github.ref_name }}
+          docker push $REPO:ci-${{ github.ref_name }}
+
+      - name: Retag admin-lambda in us-west-2 (unchanged)
+        if: needs.changes.outputs.admin != 'true'
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --region us-west-2 \
+            --repository-name mendicant-prod-admin-lambda \
+            --image-ids imageTag=ci-${{ github.ref_name }} \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image \
+            --region us-west-2 \
+            --repository-name mendicant-prod-admin-lambda \
+            --image-tag sha-${{ github.sha }} \
+            --image-manifest "$MANIFEST"
 
   # ── Summary ────────────────────────────────────────────────────────────────
   summary:
@@ -178,5 +334,5 @@ jobs:
       - name: Print deploy tag
         run: |
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "terraform apply -var=\"auth_image_tag=sha-${{ github.sha }}\" -var=\"user_image_tag=sha-${{ github.sha }}\" -var=\"admin_image_tag=sha-${{ github.sha }}\"" >> $GITHUB_STEP_SUMMARY
+          echo "terraform apply -var=\"image_tag=sha-${{ github.sha }}\"" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

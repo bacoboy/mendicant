@@ -25,18 +25,9 @@ App layer reads foundation resources via `data` sources by name convention (`men
 # Foundation (apply rarely)
 cd infrastructure/infra && terraform apply
 
-# App — each lambda has its own image tag variable.
-# Full deploy (all three lambdas at once):
-cd infrastructure/app && terraform apply \
-  -var="auth_image_tag=sha-<sha>" \
-  -var="user_image_tag=sha-<sha>" \
-  -var="admin_image_tag=sha-<sha>"
-
-# Incremental deploy (only the lambda(s) that changed):
-cd infrastructure/app && terraform apply -var="admin_image_tag=sha-<sha>"
+# App (apply on every release)
+cd infrastructure/app && terraform apply -var="image_tag=sha-<sha>"
 ```
-
-The build workflow summary prints both the full and incremental commands after each push.
 
 ## Terraform Rules
 
@@ -52,7 +43,7 @@ Why: Lists have ordering issues — adding/removing an element shifts indices an
 
 ## CI/CD
 
-GitHub Actions builds all three lambdas in parallel on every push to `main` using `ubuntu-24.04-arm` (native ARM64, matches Lambda Graviton). Each build job pushes to both regions in sequence. Tags use `sha-${GITHUB_SHA}`. Build job summary prints the exact `terraform apply` command with all three image tag variables.
+GitHub Actions detects which lambdas changed (via `dorny/paths-filter`) and only builds the affected ones on `ubuntu-24.04-arm` (native ARM64). Unchanged lambdas are retagged via the ECR API using `ci-<branch>` as a stable pointer — no compilation, no image transfer. Every commit gets all three `sha-<commit>` tags, so Terraform always uses a single `image_tag`.
 
 ECR lifecycle policy: keep last 10 `sha-` tagged images, expire untagged after 1 day.
 
