@@ -177,12 +177,6 @@ jobs:
     steps:
       - name: Print deploy tag
         run: |
-          echo "### Images pushed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tag: \`sha-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Deploy with:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "cd infrastructure/app" >> $GITHUB_STEP_SUMMARY
           echo "terraform apply -var=\"auth_image_tag=sha-${{ github.sha }}\" -var=\"user_image_tag=sha-${{ github.sha }}\" -var=\"admin_image_tag=sha-${{ github.sha }}\"" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
