@@ -312,11 +312,17 @@ async fn admin_delete_user(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Serialize)]
+struct ResetPasskeyResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recovery_url: Option<String>,
+}
+
 async fn admin_reset_passkey(
     State(state): State<AppState>,
     AuthUser(claims): AuthUser,
     Path(id): Path<String>,
-) -> Result<StatusCode, AppError> {
+) -> Result<Json<ResetPasskeyResponse>, AppError> {
     let user_id = parse_user_id(&id)?;
 
     let user = UserRepository::new(state.db.clone())
@@ -348,7 +354,8 @@ async fn admin_reset_passkey(
 
     tracing::info!(admin = %claims.email, target_user = %user_id, email = %user.email, "admin issued passkey recovery token");
 
-    Ok(StatusCode::NO_CONTENT)
+    let dev_url = matches!(state.mailer, crate::mailer::Mailer::Stdout).then_some(recovery_url);
+    Ok(Json(ResetPasskeyResponse { recovery_url: dev_url }))
 }
 
 fn parse_user_id(s: &str) -> Result<UserId, AppError> {

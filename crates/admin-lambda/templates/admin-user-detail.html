@@ -114,6 +114,11 @@
       <div id="recovery-sent-box" style="display:none;margin-top:1rem;" class="success-banner">
         recovery link sent to {{ user_email }}.
       </div>
+
+      <div id="recovery-url-box" style="display:none;margin-top:1rem;" class="success-banner">
+        <div style="margin-bottom:0.4rem;">dev mode — recovery link (not emailed):</div>
+        <a id="recovery-url-link" href="#" style="word-break:break-all;"></a>
+      </div>
     </div><!-- .admin-content -->
   </div><!-- .admin-layout -->
 {% endblock %}
@@ -153,7 +158,15 @@
     try {
       const resp = await fetch(`/admin/users/${userId}/reset-passkey`, { method: 'POST' });
       if (!resp.ok) throw new Error(await resp.text() || 'request failed');
-      document.getElementById('recovery-sent-box').style.display = 'block';
+      const data = await resp.json();
+      if (data.recovery_url) {
+        const link = document.getElementById('recovery-url-link');
+        link.href = data.recovery_url;
+        link.textContent = data.recovery_url;
+        document.getElementById('recovery-url-box').style.display = 'block';
+      } else {
+        document.getElementById('recovery-sent-box').style.display = 'block';
+      }
     } catch (e) {
       showError('failed: ' + e.message);
     } finally {
