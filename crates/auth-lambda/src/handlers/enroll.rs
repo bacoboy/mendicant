@@ -155,9 +155,9 @@ async fn enroll_begin(
     // Face ID, Windows Hello).
     // residentKey:"preferred" stores the credential in the key's internal slot so that
     // discovery-mode login (no email required) can find it.
-    // Writing a resident credential to a PIN-protected YubiKey requires UV once —
-    // that is intentional and unavoidable per CTAP2. After enrollment, every login
-    // is a single touch (userVerification:"discouraged" in login_begin).
+    // Writing a resident credential to a PIN-protected YubiKey requires UV —
+    // that is intentional and unavoidable per CTAP2. Login sends UV:"discouraged"
+    // but the key still requires PIN because the credential was enrolled with UV.
     let mut register_opts =
         serde_json::to_value(&ccr).context("failed to serialize CreationChallengeResponse")?;
     if let Some(pk) = register_opts

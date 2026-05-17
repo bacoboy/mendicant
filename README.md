@@ -68,7 +68,7 @@ cargo run -p bootstrap -- admin@example.com --display-name "Admin"
 
 The tool prints a single-use enrollment URL valid for 60 minutes (pass `--ttl-minutes N` to change). Open that URL in the browser with your hardware security key attached and click **Register Security Key**.
 
-Enrollment requires a cross-platform authenticator (hardware key — USB/NFC). Platform authenticators (Touch ID, Face ID, Windows Hello) are rejected. The key is enrolled as a **resident/discoverable credential** (`residentKey: preferred`) so that discovery-mode login (no email required) can find it. Writing a resident credential to a PIN-protected key requires UV once — you will be prompted for your PIN during enrollment. After that, every login is a single touch with no PIN.
+Enrollment requires a cross-platform authenticator (hardware key — USB/NFC). Platform authenticators (Touch ID, Face ID, Windows Hello) are rejected. The key is enrolled as a **resident/discoverable credential** (`residentKey: preferred`) so that discovery-mode login (no email required) can find it. Writing a resident credential to a PIN-protected key requires UV — you will be prompted for your PIN during enrollment. Login sends `userVerification: discouraged`, but in practice the YubiKey requires PIN entry because credentials enrolled with UV cause the key to enforce PIN on assertion regardless of the request setting.
 
 Re-run the tool any time to generate a fresh token (if the previous one expired or enrollment failed). The admin user record is reused — a new token is all that is issued.
 

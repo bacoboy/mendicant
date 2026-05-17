@@ -49,7 +49,7 @@ The `bootstrap` CLI creates an admin user and stores a single-use `AdminEnrollme
 2. Browser prompts for PIN (CTAP2 requirement for resident credential) then touch
 3. `POST /enroll/complete` — verifies, stores credential, issues JWT, redirects to `/me`
 
-`residentKey: preferred` is essential — writes credential to key's internal storage for discovery-mode login. After enrollment, login is `userVerification: discouraged` — single touch, no PIN.
+`residentKey: preferred` is essential — writes credential to key's internal storage for discovery-mode login. Login sends `userVerification: discouraged`, but in practice the YubiKey requires PIN entry — credentials enrolled with UV cause the key to enforce PIN on assertion regardless of the request setting.
 
 ## Credential Management
 

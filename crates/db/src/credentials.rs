@@ -136,12 +136,28 @@ impl CredentialRepository {
     /// Conditionally update sign_count only if the new value is greater.
     /// Tolerates counter regression (logs warning rather than erroring) to
     /// accommodate eventual consistency across Global Table replicas.
+    /// When new_count == 0 (counter-disabled passkeys such as iCloud Keychain),
+    /// skips the sign_count update entirely and only touches last_used_at.
     pub async fn update_sign_count(
         &self,
         user_id: &UserId,
         id: &CredentialId,
         new_count: u32,
     ) -> Result<(), DbError> {
+        if new_count == 0 {
+            self.db.inner
+                .update_item()
+                .table_name(&self.db.credentials_table)
+                .key("pk", pk(user_id))
+                .key("sk", sk(id))
+                .update_expression("SET last_used_at = :now")
+                .expression_attribute_values(":now", AttributeValue::S(now_utc_rfc3339()))
+                .send()
+                .await
+                .map_err(map_update_error)?;
+            return Ok(());
+        }
+
         let result = self.db.inner
             .update_item()
             .table_name(&self.db.credentials_table)
