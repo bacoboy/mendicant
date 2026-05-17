@@ -1,11 +1,12 @@
 use askama::Template;
 use axum::Router;
-use axum::extract::Query;
-use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse};
+use axum::extract::{Query, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::get;
 use std::collections::HashMap;
 
+use crate::signing::verify_jwt;
 use crate::state::AppState;
 
 pub fn routes() -> Router<AppState> {
@@ -51,8 +52,27 @@ async fn landing_page() -> impl IntoResponse {
     render(LandingPage)
 }
 
-async fn login_page() -> impl IntoResponse {
-    render(LoginPage)
+async fn login_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Some(token) = extract_auth_token(&headers) {
+        if verify_jwt(&token, &state.decoding_key).is_ok() {
+            return Redirect::to("/me").into_response();
+        }
+    }
+    render(LoginPage).into_response()
+}
+
+fn extract_auth_token(headers: &HeaderMap) -> Option<String> {
+    let cookie_hdr = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
+    for part in cookie_hdr.split(';') {
+        let part = part.trim();
+        if let Some(token) = part.strip_prefix("auth=") {
+            return Some(token.to_string());
+        }
+    }
+    None
 }
 
 async fn register_page() -> impl IntoResponse {
