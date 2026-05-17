@@ -1,15 +1,20 @@
 # Future Work
 
-## SES Integration
+## SES Production Access
 
-Send email verification links via AWS SES instead of returning the token in the response.
+SES is currently in sandbox mode — can only send to verified addresses. Request production access before opening registration to real users.
 
-**Changes needed:**
-- Update `POST /auth/register/email` to call SES `SendEmail` with link `https://{RP_ORIGIN}/register-confirm?token={token}`
-- In production: response becomes `{message: "Check your email"}` (no token)
-- In dev (local): continue returning token in response for testing, or log to stdout
-- Add SES IAM permissions to Lambda execution role
-- Terraform: SES identity + sending authorization
+**How to request:**
+AWS Console → SES → Account dashboard → Request production access.
+
+**Form answers:**
+- Mail type: Transactional
+- Website URL: `mendicant.io`
+- Use case: *We send transactional email only (account verification links). We use the AWS SES account-level suppression list to automatically suppress bounced and complained-about addresses. Our invite-only model strictly limits sending volume and recipient pool.*
+- Expected daily volume: (whatever's realistic — err low)
+
+**After approval:**
+- Remove all entries from `local.ses_verified_emails` in `ses.tf` and delete the `aws_sesv2_email_identity.verified_emails` resource block — individual recipient verification is only needed in sandbox mode. Adding/removing addresses from the list is how sandbox recipients are managed in the interim.
 
 ## Account Recovery
 
@@ -24,26 +29,8 @@ Users have no way to regain access if their authenticator is lost or broken. Thi
 
 Security note: email-based recovery must prevent account takeover — the recovery link should be single-use and short-lived (same as registration tokens).
 
-## email_tokens Terraform
-
-Add `email_tokens` table to `infrastructure/infra/modules/regional`:
-- Regional table (not Global — same-region routing)
-- TTL attribute on `expires_at`
-- Add `TABLE_EMAIL_TOKENS` env var to Lambda configuration in `infrastructure/app`
-
-## Admin User Management (Left-Nav Redesign)
-
-Reorganize the admin section with left-side navigation (mirroring the profile page redesign):
-
-- **Users section** — paginated list of all users with search/filter by email, name, role, status
-- **Per-user actions** — force re-authentication (revoke all refresh tokens), suspend/unsuspend, role changes
-- **Force re-auth** — calls `revoke_all_for_user` for the target user and clears their sessions; user is redirected to login on next request
-
-Details TBD when we get to this.
-
 ## Local Dev Email Testing
 
-Without SES configured:
-- `POST /auth/register/email` returns `{token: "..."}` in response
-- Navigate manually to `/register-confirm?token=...`
-- Alternative: mock SES endpoint or log emails to stdout via a feature flag
+Without SES configured (`SES_FROM_ADDRESS` unset), verification links are logged via `tracing::info!`. To test locally:
+- Check Lambda logs: `docker compose logs -f auth-lambda`
+- Copy the URL from the log line and navigate to it manually

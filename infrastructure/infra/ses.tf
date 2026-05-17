@@ -2,11 +2,26 @@
 # Sending region: us-east-2 only — email is not latency-critical.
 # SES remains in sandbox mode until production access is requested.
 
+# ── Account-level suppression list ────────────────────────────────────────────
+# Automatically suppresses addresses that hard-bounce or file a complaint.
+# Keeps bounce/complaint rates below AWS enforcement thresholds.
+
+resource "aws_sesv2_account_suppression_attributes" "main" {
+  provider           = aws.us_east_2
+  suppressed_reasons = ["BOUNCE", "COMPLAINT"]
+}
+
 # Sandbox-mode recipient allowlist. Remove once SES production access is granted.
 locals {
   ses_verified_emails = [
     "steve@mendicant.io",
+    "steveh@goofy.net",
   ]
+}
+
+import {
+  to = aws_sesv2_email_identity.verified_emails["steveh@goofy.net"]
+  id = "steveh@goofy.net"
 }
 
 resource "aws_sesv2_email_identity" "verified_emails" {

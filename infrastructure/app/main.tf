@@ -38,13 +38,15 @@ module "app_us_east_2" {
     aws = aws.us_east_2
   }
 
-  app_name    = local.app_name
-  environment = local.environment
-  image_tag   = var.image_tag
-  rp_id       = local.domain_name
-  rp_origins  = "https://api.${local.domain_name},https://beta.${local.domain_name}"
-  base_url    = "https://api.${local.domain_name}"
-  domain_name = local.domain_name
+  app_name        = local.app_name
+  environment     = local.environment
+  auth_image_tag  = var.auth_image_tag
+  user_image_tag  = var.user_image_tag
+  admin_image_tag = var.admin_image_tag
+  rp_id           = local.domain_name
+  rp_origins      = "https://api.${local.domain_name},https://beta.${local.domain_name}"
+  base_url        = "https://beta.${local.domain_name}"
+  domain_name     = local.domain_name
 }
 
 module "app_us_west_2" {
@@ -54,11 +56,13 @@ module "app_us_west_2" {
     aws = aws.us_west_2
   }
 
-  app_name    = local.app_name
-  environment = local.environment
-  image_tag   = var.image_tag
-  rp_id       = local.domain_name
-  rp_origins  = "https://api.${local.domain_name},https://beta.${local.domain_name}"
-  base_url    = "https://api.${local.domain_name}"
-  domain_name = local.domain_name
+  app_name        = local.app_name
+  environment     = local.environment
+  auth_image_tag  = var.auth_image_tag
+  user_image_tag  = var.user_image_tag
+  admin_image_tag = var.admin_image_tag
+  rp_id           = local.domain_name
+  rp_origins      = "https://api.${local.domain_name},https://beta.${local.domain_name}"
+  base_url        = "https://beta.${local.domain_name}"
+  domain_name     = local.domain_name
 }
