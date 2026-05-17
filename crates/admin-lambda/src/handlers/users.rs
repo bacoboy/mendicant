@@ -312,20 +312,14 @@ async fn admin_delete_user(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Serialize)]
-struct ResetPasskeyResponse {
-    recovery_url: String,
-}
-
 async fn admin_reset_passkey(
     State(state): State<AppState>,
     AuthUser(claims): AuthUser,
     Path(id): Path<String>,
-) -> Result<Json<ResetPasskeyResponse>, AppError> {
+) -> Result<StatusCode, AppError> {
     let user_id = parse_user_id(&id)?;
 
-    // Verify user exists before issuing a token.
-    UserRepository::new(state.db.clone())
+    let user = UserRepository::new(state.db.clone())
         .get(&user_id)
         .await
         .map_err(|e| match e {
@@ -344,9 +338,17 @@ async fn admin_reset_passkey(
 
     let recovery_url = format!("{}/recover?token={}", state.base_url, token_id);
 
-    tracing::info!(admin = %claims.email, target_user = %user_id, "admin issued passkey recovery token");
+    state.mailer
+        .send_recovery(&user.email, &recovery_url)
+        .await
+        .map_err(|e| {
+            tracing::error!("failed to send recovery email to {}: {e:#}", user.email);
+            AppError::Internal(e)
+        })?;
 
-    Ok(Json(ResetPasskeyResponse { recovery_url }))
+    tracing::info!(admin = %claims.email, target_user = %user_id, email = %user.email, "admin issued passkey recovery token");
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn parse_user_id(s: &str) -> Result<UserId, AppError> {

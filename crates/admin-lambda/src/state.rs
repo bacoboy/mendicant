@@ -5,6 +5,7 @@ use db::client::DynamoClient;
 use jsonwebtoken::DecodingKey;
 
 use crate::jwt::build_decoding_key;
+use crate::mailer::Mailer;
 
 /// Shared application state, constructed once at Lambda cold-start.
 ///
@@ -16,6 +17,7 @@ pub struct AppState {
     pub db: DynamoClient,
     pub decoding_key: DecodingKey,
     pub base_url: String,
+    pub mailer: Mailer,
 }
 
 impl AppState {
@@ -35,10 +37,11 @@ impl AppState {
 
         let db = DynamoClient::from_env(ddb_client);
         let decoding_key = build_decoding_key(&config).await?;
+        let mailer = Mailer::from_env(&config).await?;
 
         let base_url = std::env::var("BASE_URL")
             .unwrap_or_else(|_| "https://localhost:9001".into());
 
-        Ok(Self { db, decoding_key, base_url })
+        Ok(Self { db, decoding_key, base_url, mailer })
     }
 }

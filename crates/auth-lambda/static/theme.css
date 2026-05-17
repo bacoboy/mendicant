@@ -179,6 +179,16 @@ button:disabled, .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   margin-bottom: 1rem;
 }
 
+.success-banner {
+  background: rgba(166,227,161,0.1);
+  border: 1px solid var(--green);
+  color: var(--green);
+  padding: 0.65rem 1rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
 .error { color: var(--red); font-size: 0.85rem; margin-bottom: 0.75rem; }
 .success { color: var(--green); font-size: 0.85rem; }
 .muted { color: var(--subtext0); font-size: 0.82rem; }

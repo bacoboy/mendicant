@@ -111,9 +111,8 @@
         <button class="btn btn-danger" onclick="deleteUser()">delete user</button>
       </div>
 
-      <div id="recovery-url-box" class="recovery-url-box" style="display:none;">
-        <div class="muted" style="margin-bottom:0.4rem;">recovery link (copy and send to user):</div>
-        <a id="recovery-url-link" href="#"></a>
+      <div id="recovery-sent-box" style="display:none;margin-top:1rem;" class="success-banner">
+        recovery link sent to {{ user_email }}.
       </div>
     </div><!-- .admin-content -->
   </div><!-- .admin-layout -->
@@ -132,7 +131,8 @@
 
   async function setStatus(status) {
     const label = status === 'suspended' ? 'suspend' : 'activate';
-    if (!confirm(`${label} this user?\n\nSuspending revokes all active sessions immediately.`)) return;
+    const detail = status === 'suspended' ? '\n\nThis will revoke all active sessions immediately.' : '';
+    if (!confirm(`${label} this user?${detail}`)) return;
     try {
       const resp = await fetch(`/admin/users/${userId}/status`, {
         method: 'POST',
@@ -149,16 +149,11 @@
   async function resetPasskey() {
     const btn = document.getElementById('reset-passkey-btn');
     btn.disabled = true;
-    btn.textContent = 'generating…';
+    btn.textContent = 'sending…';
     try {
       const resp = await fetch(`/admin/users/${userId}/reset-passkey`, { method: 'POST' });
       if (!resp.ok) throw new Error(await resp.text() || 'request failed');
-      const data = await resp.json();
-      const box = document.getElementById('recovery-url-box');
-      const link = document.getElementById('recovery-url-link');
-      link.href = data.recovery_url;
-      link.textContent = data.recovery_url;
-      box.style.display = 'block';
+      document.getElementById('recovery-sent-box').style.display = 'block';
     } catch (e) {
       showError('failed: ' + e.message);
     } finally {
