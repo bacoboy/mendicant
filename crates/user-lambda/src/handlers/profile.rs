@@ -53,6 +53,8 @@ struct ProfilePage {
     debug_jwt_sub: String,
     debug_jwt_email: String,
     debug_jwt_role: String,
+    debug_jwt_jti: String,
+    debug_jwt_exp: String,
 }
 
 async fn profile_page(
@@ -129,6 +131,13 @@ async fn profile_page(
         debug_jwt_sub: claims.sub.clone(),
         debug_jwt_email: claims.email.clone(),
         debug_jwt_role: serde_json::to_string(&claims.role).unwrap_or_default(),
+        debug_jwt_jti: claims.jti.clone(),
+        debug_jwt_exp: {
+            let dt = OffsetDateTime::from_unix_timestamp(claims.exp).unwrap_or(OffsetDateTime::UNIX_EPOCH);
+            let formatted = fmt_dt(dt);
+            let fuzzy = fuzzy_duration(claims.exp - now);
+            format!("{formatted} ({fuzzy})")
+        },
     };
 
     match page.render() {
@@ -166,15 +175,14 @@ async fn update_profile(
 
 fn fuzzy_duration(secs: i64) -> String {
     if secs <= 0 { return "expired".into(); }
-    let minutes = secs / 60;
-    let hours   = minutes / 60;
-    let days    = hours / 24;
-    if days >= 2      { return format!("expires in {} days", days); }
-    if days == 1      { return "expires in 1 day".into(); }
-    if hours >= 2     { return format!("expires in {} hours", hours); }
-    if hours == 1     { return "expires in 1 hour".into(); }
-    if minutes >= 2   { return format!("expires in {} minutes", minutes); }
-    "expires in a moment".into()
+    let days    = secs / 86_400;
+    let hours   = (secs % 86_400) / 3_600;
+    let minutes = (secs % 3_600) / 60;
+    let seconds = secs % 60;
+    if days >= 1    { return format!("in {} day{} and {} hr{}", days, if days == 1 { "" } else { "s" }, hours, if hours == 1 { "" } else { "s" }); }
+    if hours >= 1   { return format!("in {} hr{} and {} min", hours, if hours == 1 { "" } else { "s" }, minutes); }
+    if minutes >= 1 { return format!("in {} min and {} sec", minutes, seconds); }
+    format!("in {} sec", seconds)
 }
 
 fn fmt_dt(dt: OffsetDateTime) -> String {
