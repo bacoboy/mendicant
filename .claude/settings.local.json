@@ -61,7 +61,13 @@
       "Bash(aws sesv2 *)",
       "Bash(gh release *)",
       "Bash(git -C /Users/steve/workspace/mendicant status)",
-      "Bash(git -C /Users/steve/workspace/mendicant diff HEAD --stat)"
+      "Bash(git -C /Users/steve/workspace/mendicant diff HEAD --stat)",
+      "Bash(AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local aws dynamodb list-tables *)",
+      "Bash(./scripts/setup-dynamodb-local.sh)",
+      "Bash(awk 'NR>=496 && NR<=629' /Users/steve/workspace/mendicant/crates/auth-lambda/src/handlers/auth.rs)",
+      "Bash(awk 'NR>=737 && NR<=765' /tmp/auth-after-passkey.rs)",
+      "Bash(awk 'NR>=784 && NR<=812' /tmp/auth-after-passkey.rs)",
+      "Bash(AWS_PROFILE=mendicant-admin aws ecr describe-image-scan-findings *)"
     ]
   }
 }

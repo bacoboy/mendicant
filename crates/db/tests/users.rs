@@ -25,7 +25,7 @@ async fn put_and_get_by_id() {
     assert_eq!(fetched.email, user.email);
     assert_eq!(fetched.display_name, user.display_name);
     assert_eq!(fetched.role, Role::Free);
-    assert_eq!(fetched.status, UserStatus::PendingVerification);
+    assert_eq!(fetched.status, UserStatus::Active);
 }
 
 #[tokio::test]
@@ -95,7 +95,7 @@ async fn list_returns_stored_users() {
     repo.put(&u1).await.unwrap();
     repo.put(&u2).await.unwrap();
 
-    let (users, cursor) = repo.list(10, None).await.unwrap();
+    let (users, cursor) = repo.list(10, None, None, None, None).await.unwrap();
     assert_eq!(users.len(), 2);
     assert!(cursor.is_none());
 }
@@ -111,11 +111,11 @@ async fn list_pagination() {
             .unwrap();
     }
 
-    let (page1, cursor) = repo.list(3, None).await.unwrap();
+    let (page1, cursor) = repo.list(3, None, None, None, None).await.unwrap();
     assert_eq!(page1.len(), 3);
     assert!(cursor.is_some(), "expected a next-page cursor");
 
-    let (page2, cursor2) = repo.list(3, cursor).await.unwrap();
+    let (page2, cursor2) = repo.list(3, cursor, None, None, None).await.unwrap();
     assert_eq!(page2.len(), 2);
     assert!(cursor2.is_none());
 
@@ -123,4 +123,64 @@ async fn list_pagination() {
     let all_ids: std::collections::HashSet<_> =
         page1.iter().chain(page2.iter()).map(|u| &u.id).collect();
     assert_eq!(all_ids.len(), 5);
+}
+
+#[tokio::test]
+async fn update_display_name() {
+    let env = common::TestEnv::new().await;
+    let repo = UserRepository::new(env.db.clone());
+    let user = alice();
+
+    repo.put(&user).await.unwrap();
+    repo.update_display_name(&user.id, "Alicia").await.unwrap();
+
+    let fetched = repo.get(&user.id).await.unwrap();
+    assert_eq!(fetched.display_name, "Alicia");
+}
+
+#[tokio::test]
+async fn delete_removes_user() {
+    let env = common::TestEnv::new().await;
+    let repo = UserRepository::new(env.db.clone());
+    let user = alice();
+
+    repo.put(&user).await.unwrap();
+    repo.delete(&user.id).await.unwrap();
+
+    let err = repo.get(&user.id).await.unwrap_err();
+    assert!(matches!(err, DbError::NotFound));
+}
+
+#[tokio::test]
+async fn list_with_role_filter() {
+    let env = common::TestEnv::new().await;
+    let repo = UserRepository::new(env.db.clone());
+
+    let mut member = User::new("member@example.com".into(), "Member".into());
+    member.role = Role::Member;
+    let free = User::new("free@example.com".into(), "Free".into());
+
+    repo.put(&member).await.unwrap();
+    repo.put(&free).await.unwrap();
+
+    let (users, _) = repo.list(10, None, None, Some(&Role::Member), None).await.unwrap();
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].email, "member@example.com");
+}
+
+#[tokio::test]
+async fn list_with_status_filter() {
+    let env = common::TestEnv::new().await;
+    let repo = UserRepository::new(env.db.clone());
+
+    let active = User::new("active@example.com".into(), "Active".into());
+    let mut suspended = User::new("suspended@example.com".into(), "Suspended".into());
+    suspended.status = UserStatus::Suspended;
+
+    repo.put(&active).await.unwrap();
+    repo.put(&suspended).await.unwrap();
+
+    let (users, _) = repo.list(10, None, None, None, Some(&UserStatus::Suspended)).await.unwrap();
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].email, "suspended@example.com");
 }

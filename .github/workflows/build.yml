@@ -44,9 +44,16 @@ jobs:
               - 'crates/db/**'
               - 'crates/admin-lambda/**'
 
+  # ── Tests ──────────────────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - run: cargo test -p domain
+
   # ── auth-lambda ────────────────────────────────────────────────────────────
   build-auth:
-    needs: changes
+    needs: [changes, test]
     runs-on: ${{ needs.changes.outputs.auth == 'true' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       id-token: write
@@ -140,7 +147,7 @@ jobs:
 
   # ── user-lambda ────────────────────────────────────────────────────────────
   build-user:
-    needs: changes
+    needs: [changes, test]
     runs-on: ${{ needs.changes.outputs.user == 'true' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       id-token: write
@@ -234,7 +241,7 @@ jobs:
 
   # ── admin-lambda ───────────────────────────────────────────────────────────
   build-admin:
-    needs: changes
+    needs: [changes, test]
     runs-on: ${{ needs.changes.outputs.admin == 'true' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       id-token: write

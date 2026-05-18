@@ -64,6 +64,7 @@ impl EmailTokenRepository {
             .put_item()
             .table_name(&self.db.email_tokens_table)
             .set_item(Some(email_token_to_item(token)))
+            .condition_expression("attribute_not_exists(pk)")
             .send()
             .await
             .map_err(map_put_error)?;

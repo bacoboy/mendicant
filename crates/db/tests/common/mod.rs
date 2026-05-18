@@ -53,6 +53,16 @@ fn gsi(index_name: &str, hash_attr: &str) -> GlobalSecondaryIndex {
         .unwrap()
 }
 
+fn gsi_composite(index_name: &str, hash_attr: &str, range_attr: &str) -> GlobalSecondaryIndex {
+    GlobalSecondaryIndex::builder()
+        .index_name(index_name)
+        .key_schema(hash_key(hash_attr))
+        .key_schema(range_key(range_attr))
+        .projection(Projection::builder().projection_type(ProjectionType::All).build())
+        .build()
+        .unwrap()
+}
+
 // ── TestEnv ────────────────────────────────────────────────────────────────────
 
 impl TestEnv {
@@ -115,7 +125,7 @@ impl Drop for TestEnv {
 }
 
 async fn create_tables(client: &Client, db: &DynamoClient) {
-    // users: composite key (pk HASH, sk RANGE) + email GSI
+    // users: composite key (pk HASH, sk RANGE) + sk-email-index + role-index
     client
         .create_table()
         .table_name(&db.users_table)
@@ -123,9 +133,11 @@ async fn create_tables(client: &Client, db: &DynamoClient) {
         .attribute_definitions(attr("pk"))
         .attribute_definitions(attr("sk"))
         .attribute_definitions(attr("email"))
+        .attribute_definitions(attr("role"))
         .key_schema(hash_key("pk"))
         .key_schema(range_key("sk"))
-        .global_secondary_indexes(gsi("email-index", "email"))
+        .global_secondary_indexes(gsi_composite("sk-email-index", "sk", "email"))
+        .global_secondary_indexes(gsi_composite("role-index", "role", "email"))
         .send()
         .await
         .expect("create users table");

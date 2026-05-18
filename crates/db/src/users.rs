@@ -117,8 +117,9 @@ impl UserRepository {
         let resp = self.db.inner
             .query()
             .table_name(&self.db.users_table)
-            .index_name("email-index")
-            .key_condition_expression("email = :email")
+            .index_name("sk-email-index")
+            .key_condition_expression("sk = :sk AND email = :email")
+            .expression_attribute_values(":sk", AttributeValue::S(SK.into()))
             .expression_attribute_values(":email", AttributeValue::S(email.into()))
             .limit(1)
             .send()
