@@ -73,14 +73,14 @@ jobs:
           cache-to: type=gha,scope=auth-lambda,mode=max
 
       - name: Configure AWS credentials (us-east-2)
-        uses: aws-actions/configure-aws-credentials@v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6.1.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-east-2
 
       - name: Log in to ECR (us-east-2)
         if: needs.changes.outputs.auth == 'true'
-        uses: aws-actions/amazon-ecr-login@v2.1.4
+        uses: aws-actions/amazon-ecr-login@v2.1.5
 
       - name: Push auth-lambda to us-east-2
         if: needs.changes.outputs.auth == 'true'
@@ -106,14 +106,14 @@ jobs:
             --image-manifest "$MANIFEST"
 
       - name: Configure AWS credentials (us-west-2)
-        uses: aws-actions/configure-aws-credentials@v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6.1.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Log in to ECR (us-west-2)
         if: needs.changes.outputs.auth == 'true'
-        uses: aws-actions/amazon-ecr-login@v2.1.4
+        uses: aws-actions/amazon-ecr-login@v2.1.5
 
       - name: Push auth-lambda to us-west-2
         if: needs.changes.outputs.auth == 'true'
@@ -167,14 +167,14 @@ jobs:
           cache-to: type=gha,scope=user-lambda,mode=max
 
       - name: Configure AWS credentials (us-east-2)
-        uses: aws-actions/configure-aws-credentials@v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6.1.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-east-2
 
       - name: Log in to ECR (us-east-2)
         if: needs.changes.outputs.user == 'true'
-        uses: aws-actions/amazon-ecr-login@v2.1.4
+        uses: aws-actions/amazon-ecr-login@v2.1.5
 
       - name: Push user-lambda to us-east-2
         if: needs.changes.outputs.user == 'true'
@@ -200,14 +200,14 @@ jobs:
             --image-manifest "$MANIFEST"
 
       - name: Configure AWS credentials (us-west-2)
-        uses: aws-actions/configure-aws-credentials@v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6.1.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Log in to ECR (us-west-2)
         if: needs.changes.outputs.user == 'true'
-        uses: aws-actions/amazon-ecr-login@v2.1.4
+        uses: aws-actions/amazon-ecr-login@v2.1.5
 
       - name: Push user-lambda to us-west-2
         if: needs.changes.outputs.user == 'true'
@@ -261,14 +261,14 @@ jobs:
           cache-to: type=gha,scope=admin-lambda,mode=max
 
       - name: Configure AWS credentials (us-east-2)
-        uses: aws-actions/configure-aws-credentials@v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6.1.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-east-2
 
       - name: Log in to ECR (us-east-2)
         if: needs.changes.outputs.admin == 'true'
-        uses: aws-actions/amazon-ecr-login@v2.1.4
+        uses: aws-actions/amazon-ecr-login@v2.1.5
 
       - name: Push admin-lambda to us-east-2
         if: needs.changes.outputs.admin == 'true'
@@ -294,14 +294,14 @@ jobs:
             --image-manifest "$MANIFEST"
 
       - name: Configure AWS credentials (us-west-2)
-        uses: aws-actions/configure-aws-credentials@v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6.1.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Log in to ECR (us-west-2)
         if: needs.changes.outputs.admin == 'true'
-        uses: aws-actions/amazon-ecr-login@v2.1.4
+        uses: aws-actions/amazon-ecr-login@v2.1.5
 
       - name: Push admin-lambda to us-west-2
         if: needs.changes.outputs.admin == 'true'
