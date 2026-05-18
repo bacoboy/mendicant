@@ -706,13 +706,36 @@ fn is_secure_context() -> bool {
 
 // ── Token Refresh ─────────────────────────────────────────────────────────────
 
-/// POST /auth/refresh — exchange a valid refresh token cookie for a new access
-/// token + rotated refresh token. The old refresh token is revoked on use.
+#[derive(Deserialize)]
+struct RefreshRequest {
+    refresh_token: String,
+}
+
+#[derive(Serialize)]
+struct RefreshResponse {
+    access_token: String,
+    refresh_token: String,
+    token_type: &'static str,
+    expires_in: i64,
+}
+
+/// POST /auth/refresh — exchange a valid refresh token for a new access token +
+/// rotated refresh token. The old refresh token is revoked on use.
+///
+/// Browser clients send the JTI via the `refresh_token` cookie and receive new
+/// tokens as cookies. CLI clients send `{"refresh_token":"<jti>"}` in the JSON
+/// body and receive `{"access_token":…,"refresh_token":…}` in the JSON response.
 async fn token_refresh(
     axum::extract::State(state): axum::extract::State<AppState>,
     headers: axum::http::HeaderMap,
-) -> Result<impl IntoResponse, AppError> {
-    let jti = extract_refresh_jti(&headers).ok_or(AppError::Unauthorized)?;
+    body: Option<Json<RefreshRequest>>,
+) -> Result<axum::response::Response, AppError> {
+    let (jti, json_client) = if let Some(Json(req)) = body {
+        (req.refresh_token, true)
+    } else {
+        let jti = extract_refresh_jti(&headers).ok_or(AppError::Unauthorized)?;
+        (jti, false)
+    };
 
     let refresh_repo = RefreshTokenRepository::new(state.db.clone());
     let token = refresh_repo.get(&jti).await.map_err(|_| AppError::Unauthorized)?;
@@ -733,6 +756,15 @@ async fn token_refresh(
     let tokens = issue_tokens(&user.id, &user.role, &user.email, &state.signer, &refresh_repo, token.client_hint)
         .await
         .map_err(AppError::Internal)?;
+
+    if json_client {
+        return Ok(Json(RefreshResponse {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token_jti,
+            token_type: "Bearer",
+            expires_in: tokens.expires_in,
+        }).into_response());
+    }
 
     let secure = is_secure_context();
     let secure_flag = if secure { "; Secure" } else { "" };
