@@ -36,7 +36,7 @@ resource "aws_ecr_repository" "auth_lambda_us_east_2" {
   provider = aws.us_east_2
 
   name                 = "${local.prefix}-auth-lambda"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -55,7 +55,7 @@ resource "aws_ecr_repository" "user_lambda_us_east_2" {
   provider = aws.us_east_2
 
   name                 = "${local.prefix}-user-lambda"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
   force_delete         = true # safety: destroy even with images present (relevant on first apply, the old "users-lambda" repo is being replaced)
 
   image_scanning_configuration {
@@ -75,7 +75,7 @@ resource "aws_ecr_repository" "admin_lambda_us_east_2" {
   provider = aws.us_east_2
 
   name                 = "${local.prefix}-admin-lambda"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -96,7 +96,7 @@ resource "aws_ecr_repository" "auth_lambda_us_west_2" {
   provider = aws.us_west_2
 
   name                 = "${local.prefix}-auth-lambda"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -115,7 +115,7 @@ resource "aws_ecr_repository" "user_lambda_us_west_2" {
   provider = aws.us_west_2
 
   name                 = "${local.prefix}-user-lambda"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
   force_delete         = true
 
   image_scanning_configuration {
@@ -135,7 +135,7 @@ resource "aws_ecr_repository" "admin_lambda_us_west_2" {
   provider = aws.us_west_2
 
   name                 = "${local.prefix}-admin-lambda"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
